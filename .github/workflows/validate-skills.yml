@@ -1,0 +1,310 @@
+name: Validate Skills
+
+# Structural CI for the Coinis skills bundle. Every check below prints a clear
+# PASS/FAIL line and the job fails on the first error, so a red run points
+# straight at the offending file.
+#
+# Run the same checks locally (no GitHub Actions needed):
+#
+#   python3 -m pip install --quiet pyyaml
+#   python3 .github/scripts/validate_skills.py    # if you mirror this into a script, OR
+#   # just run the per-step bash blocks below from the repo root.
+#
+# The fastest local equivalent is to copy each `run:` block into a shell from
+# the repo root. They use only bash + jq + python3 + grep/awk — all present on
+# a stock macOS/Linux box (jq via `brew install jq` / `apt-get install jq`).
+
+on:
+  pull_request:
+    paths:
+      - "coinis-*/**"
+      - ".claude-plugin/**"
+      - ".codex-plugin/**"
+      - ".cursor-plugin/**"
+      - "VERSION"
+      - ".github/workflows/validate-skills.yml"
+  push:
+    branches: [main]
+    paths:
+      - "coinis-*/**"
+      - ".claude-plugin/**"
+      - ".codex-plugin/**"
+      - ".cursor-plugin/**"
+      - "VERSION"
+      - ".github/workflows/validate-skills.yml"
+
+jobs:
+  validate:
+    name: Frontmatter, version sync, marketplace, and references
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyYAML
+        run: pip install pyyaml --quiet
+
+      # ---------------------------------------------------------------------
+      # CHECK 0 — JSON validity
+      # All plugin manifests + the marketplace listing must parse as JSON
+      # before any later check tries to read fields out of them.
+      # ---------------------------------------------------------------------
+      - name: Validate JSON parses (all manifests)
+        run: |
+          set -euo pipefail
+          fail=0
+          for f in \
+            .claude-plugin/plugin.json \
+            .claude-plugin/marketplace.json \
+            .codex-plugin/plugin.json \
+            .cursor-plugin/plugin.json; do
+            if [ ! -f "$f" ]; then
+              echo "::error file=$f::expected manifest is missing"
+              fail=1
+              continue
+            fi
+            if python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$f"; then
+              echo "PASS  $f parses as JSON"
+            else
+              echo "::error file=$f::invalid JSON"
+              fail=1
+            fi
+          done
+          [ "$fail" -eq 0 ] || { echo "FAIL  one or more manifests are not valid JSON"; exit 1; }
+          echo "PASS  all manifests are valid JSON"
+
+      # ---------------------------------------------------------------------
+      # CHECK 1 — Frontmatter
+      # Every coinis-*/SKILL.md must have YAML frontmatter where:
+      #   - name == directory name
+      #   - description is present and starts with "Use when"
+      # Coinis skills do NOT carry a per-skill `version` field, and a
+      # "NOT for" boundary is additive (encouraged, not required), so neither
+      # is enforced here.
+      # ---------------------------------------------------------------------
+      - name: Validate frontmatter (name == dir, description starts with "Use when")
+        run: |
+          set -euo pipefail
+          fail=0
+          for skill_dir in coinis-*/; do
+            skill_name="${skill_dir%/}"
+            skill_md="${skill_dir}SKILL.md"
+            if [ ! -f "$skill_md" ]; then
+              echo "::error::$skill_md missing"
+              fail=1
+              continue
+            fi
+            python3 - "$skill_md" "$skill_name" <<'PY' || fail=1
+          import sys, re, pathlib
+          import yaml
+
+          path = pathlib.Path(sys.argv[1])
+          expected_name = sys.argv[2]
+          text = path.read_text()
+
+          m = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
+          if not m:
+              print(f"::error file={path}::no YAML frontmatter (must open with '---')")
+              sys.exit(1)
+
+          try:
+              fm = yaml.safe_load(m.group(1)) or {}
+          except yaml.YAMLError as exc:
+              print(f"::error file={path}::frontmatter is not valid YAML: {exc}")
+              sys.exit(1)
+
+          if not isinstance(fm, dict):
+              print(f"::error file={path}::frontmatter must be a YAML mapping")
+              sys.exit(1)
+
+          errors = []
+
+          name = fm.get("name")
+          if not name:
+              errors.append("name missing")
+          elif name != expected_name:
+              errors.append(f"name '{name}' != directory '{expected_name}'")
+
+          # description may be a YAML block scalar (|) so we normalise whitespace
+          # before testing the "Use when" prefix.
+          desc = fm.get("description")
+          if not desc:
+              errors.append("description missing")
+          else:
+              desc_str = str(desc).strip()
+              if len(desc_str) > 1024:
+                  errors.append(f"description exceeds 1024 characters ({len(desc_str)})")
+              if not desc_str.startswith("Use when"):
+                  first = desc_str.splitlines()[0][:60] if desc_str else ""
+                  errors.append(f"description must start with 'Use when' (got: '{first}…')")
+
+          for err in errors:
+              print(f"::error file={path}::{err}")
+          if errors:
+              sys.exit(1)
+
+          print(f"PASS  {path} — frontmatter valid (name={name})")
+          PY
+          done
+          [ "$fail" -eq 0 ] || { echo "FAIL  frontmatter validation failed"; exit 1; }
+          echo "PASS  every coinis-*/SKILL.md has valid frontmatter"
+
+      # ---------------------------------------------------------------------
+      # CHECK 2 — Version sync
+      # VERSION must equal the version recorded in:
+      #   - .claude-plugin/plugin.json          .version
+      #   - .claude-plugin/marketplace.json     .plugins[0].version
+      #   - .codex-plugin/plugin.json           .version
+      #   - .cursor-plugin/plugin.json          .version
+      # The other .{chatgpt,cline,manus,perplexity,vscode,warp,windsurf}-plugin
+      # folders ship only a README.md (no manifest) and are intentionally
+      # excluded. Coinis SKILL.md files carry no version, so they are not
+      # checked here.
+      # ---------------------------------------------------------------------
+      - name: Validate version sync (VERSION == every manifest)
+        run: |
+          set -euo pipefail
+          ROOT_VERSION="$(tr -d '[:space:]' < VERSION)"
+          echo "Root VERSION: $ROOT_VERSION"
+          fail=0
+
+          # Flat .version in the three plugin manifests.
+          for f in .claude-plugin/plugin.json .codex-plugin/plugin.json .cursor-plugin/plugin.json; do
+            v="$(jq -r '.version' "$f")"
+            if [ "$v" != "$ROOT_VERSION" ]; then
+              echo "::error file=$f::version '$v' != VERSION '$ROOT_VERSION'"
+              fail=1
+            else
+              echo "PASS  $f version $v matches VERSION"
+            fi
+          done
+
+          # Nested .plugins[0].version in the marketplace listing.
+          v="$(jq -r '.plugins[0].version' .claude-plugin/marketplace.json)"
+          if [ "$v" != "$ROOT_VERSION" ]; then
+            echo "::error file=.claude-plugin/marketplace.json::plugins[0].version '$v' != VERSION '$ROOT_VERSION'"
+            fail=1
+          else
+            echo "PASS  .claude-plugin/marketplace.json plugins[0].version $v matches VERSION"
+          fi
+
+          [ "$fail" -eq 0 ] || { echo "FAIL  version mismatch across manifests"; exit 1; }
+          echo "PASS  all version locations match $ROOT_VERSION"
+
+      # ---------------------------------------------------------------------
+      # CHECK 3 — Marketplace completeness (two-way)
+      # Every top-level coinis-*/ directory MUST be listed in
+      # .claude-plugin/marketplace.json under plugins[0].skills[].path, and
+      # every listed skill path MUST correspond to an existing directory.
+      # Fails on any orphan skill dir OR any listed-but-missing dir.
+      # ---------------------------------------------------------------------
+      - name: Validate marketplace lists every skill folder (and vice versa)
+        run: |
+          set -euo pipefail
+          fail=0
+
+          # Paths the marketplace claims to ship (one per line).
+          listed="$(jq -r '.plugins[0].skills[].path' .claude-plugin/marketplace.json)"
+
+          # 3a) Every directory on disk must be listed.
+          for skill_dir in coinis-*/; do
+            skill_name="${skill_dir%/}"
+            if ! printf '%s\n' "$listed" | grep -qxF "$skill_name"; then
+              echo "::error::skill folder '$skill_name' exists on disk but is NOT listed in .claude-plugin/marketplace.json"
+              fail=1
+            fi
+          done
+
+          # 3b) Every listed path must exist on disk.
+          while IFS= read -r p; do
+            [ -z "$p" ] && continue
+            if [ ! -d "$p" ]; then
+              echo "::error file=.claude-plugin/marketplace.json::listed skill path '$p' has no matching directory"
+              fail=1
+            fi
+          done <<< "$listed"
+
+          # Count sanity (informational): how many skills are listed.
+          listed_count="$(printf '%s\n' "$listed" | grep -c . || true)"
+          disk_count="$(ls -d coinis-*/ | wc -l | tr -d '[:space:]')"
+          echo "Skill dirs on disk: $disk_count   Listed in marketplace: $listed_count"
+
+          [ "$fail" -eq 0 ] || { echo "FAIL  marketplace listing and skill dirs are out of sync"; exit 1; }
+          echo "PASS  marketplace lists every skill folder and every listed folder exists"
+
+      # ---------------------------------------------------------------------
+      # CHECK 4 — Reference-link resolution
+      #   4a) Every [[skill-name]] cross-link in any SKILL.md must resolve to an
+      #       existing coinis-<skill-name>/ directory. Both the [[coinis-foo]]
+      #       form and the bare [[foo]] form are normalised to coinis-foo/.
+      #   4b) Every *relative* markdown file link (](path.md) / (path.md#anchor))
+      #       in any SKILL.md or README.md must point at a file that exists,
+      #       resolved relative to the linking file's own directory. External
+      #       URLs (http/https/mailto) and pure in-page anchors (#foo) are
+      #       skipped.
+      # ---------------------------------------------------------------------
+      - name: Validate cross-links and relative markdown links resolve
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib, re, sys
+
+          root = pathlib.Path(".").resolve()
+          errors = []
+
+          # Set of skill directory names that actually exist (e.g. "coinis-polling").
+          skill_dirs = {p.name for p in root.glob("coinis-*") if p.is_dir()}
+
+          # ---- 4a) [[skill-name]] cross-links inside every SKILL.md ----
+          link_re = re.compile(r"\[\[([a-zA-Z0-9_-]+)\]\]")
+          for skill_md in sorted(root.glob("coinis-*/SKILL.md")):
+              text = skill_md.read_text()
+              for target in link_re.findall(text):
+                  # Normalise both [[coinis-foo]] and bare [[foo]] to coinis-foo.
+                  normalized = target if target.startswith("coinis-") else f"coinis-{target}"
+                  if normalized not in skill_dirs:
+                      errors.append(
+                          f"{skill_md.relative_to(root)}: cross-link [[{target}]] "
+                          f"does not resolve to a skill dir ('{normalized}/' missing)"
+                      )
+
+          # ---- 4b) relative markdown file links in SKILL.md and README.md ----
+          md_files = sorted(root.glob("coinis-*/SKILL.md")) + [
+              p for p in [root / "README.md"] if p.exists()
+          ]
+          # Inline markdown links: ](target). Capture the URL/path portion.
+          inline_re = re.compile(r"\]\(([^)\s]+)\)")
+          for md in md_files:
+              base = md.parent
+              for raw in inline_re.findall(md.read_text()):
+                  url = raw.strip()
+                  # Skip external links and pure anchors.
+                  if url.startswith(("http://", "https://", "mailto:", "#")):
+                      continue
+                  # Only validate links that point at markdown files.
+                  path_part = url.split("#", 1)[0]
+                  if not path_part.endswith(".md"):
+                      continue
+                  target = (base / path_part).resolve()
+                  if not target.is_file():
+                      errors.append(
+                          f"{md.relative_to(root)}: relative link '{url}' -> "
+                          f"'{path_part}' does not exist"
+                      )
+
+          if errors:
+              for e in errors:
+                  print(f"::error::{e}")
+              print(f"FAIL  {len(errors)} broken reference link(s)")
+              sys.exit(1)
+
+          print("PASS  all [[cross-links]] and relative markdown links resolve")
+          PY
+
+      - name: All checks passed
+        run: |
+          echo "PASS  validate-skills: frontmatter, version sync, marketplace, JSON, and links all OK"

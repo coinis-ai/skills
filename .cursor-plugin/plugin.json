@@ -1,0 +1,29 @@
+{
+  "$schema": "https://cursor.com/schemas/cursor-plugin/plugin.json",
+  "name": "coinis",
+  "displayName": "Coinis",
+  "version": "1.2.0",
+  "description": "Coinis MCP skills: image and video creative generation, branded campaign launch on Meta, performance reports, async-job polling, and multi-product batches via the Coinis advertising platform.",
+  "author": {
+    "name": "Coinis",
+    "email": "support@coinis.com",
+    "url": "https://coinis.com"
+  },
+  "publisher": "Coinis",
+  "homepage": "https://coinis.com",
+  "repository": "https://github.com/coinis-ltd/skills",
+  "license": "MIT",
+  "category": "ai-content",
+  "keywords": [
+    "coinis",
+    "mcp",
+    "advertising",
+    "creative-generation",
+    "image-generation",
+    "video-generation",
+    "meta-ads",
+    "campaign-launch",
+    "ugc",
+    "avatar"
+  ]
+}

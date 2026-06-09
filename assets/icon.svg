@@ -1,0 +1,5 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Coinis">
+  <!-- Placeholder mark pending official Coinis brand art. Colors derived from the Coinis logo: amber #F9AE3B, navy #21294A. -->
+  <rect width="512" height="512" rx="116" fill="#F9AE3B"/>
+  <path d="M256 120c-75.1 0-136 60.9-136 136s60.9 136 136 136c46.3 0 87.2-23.2 111.7-58.6l-58.1-39.2c-11.9 17.3-31.8 28.6-54.4 28.6-36.3 0-65.7-29.4-65.7-65.7s29.4-65.7 65.7-65.7c22.6 0 42.5 11.3 54.4 28.6l58.1-39.2C343.2 143.2 302.3 120 256 120z" fill="#21294A"/>
+</svg>

@@ -1,0 +1,57 @@
+{
+  "name": "coinis",
+  "owner": {
+    "name": "Coinis",
+    "url": "https://coinis.com"
+  },
+  "plugins": [
+    {
+      "name": "coinis",
+      "source": "./",
+      "description": "Ad creative generation, Meta campaign launch, and performance reports via the Coinis MCP.",
+      "version": "1.2.0",
+      "skills": [
+        {
+          "name": "image-from-url",
+          "path": "coinis-image-from-url",
+          "invoke": "/coinis:image-from-url"
+        },
+        {
+          "name": "video-from-url",
+          "path": "coinis-video-from-url",
+          "invoke": "/coinis:video-from-url"
+        },
+        {
+          "name": "competitor-recreate",
+          "path": "coinis-competitor-recreate",
+          "invoke": "/coinis:competitor-recreate"
+        },
+        {
+          "name": "revisions",
+          "path": "coinis-revisions",
+          "invoke": "/coinis:revisions"
+        },
+        {
+          "name": "polling",
+          "path": "coinis-polling",
+          "invoke": "/coinis:polling"
+        },
+        {
+          "name": "batch-patterns",
+          "path": "coinis-batch-patterns",
+          "invoke": "/coinis:batch-patterns"
+        },
+        {
+          "name": "campaign-flow-cli",
+          "path": "coinis-campaign-flow-cli",
+          "invoke": "/coinis:campaign-flow-cli"
+        },
+        {
+          "name": "reports-cli",
+          "path": "coinis-reports-cli",
+          "invoke": "/coinis:reports-cli"
+        }
+      ]
+    }
+  ]
+}

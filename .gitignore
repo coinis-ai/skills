@@ -1,0 +1,11 @@
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+node_modules/
+.codegraph/
+.env
+.env.local
+*.log
+.claude/settings.local.json

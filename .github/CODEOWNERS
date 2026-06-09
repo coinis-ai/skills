@@ -1,0 +1,14 @@
+# Default owner for everything in this repo.
+*                              @jovan-kovacevic
+
+# Plugin manifests — extra scrutiny (see CONTRIBUTING.md).
+.claude-plugin/                @jovan-kovacevic
+.codex-plugin/                 @jovan-kovacevic
+.cursor-plugin/                @jovan-kovacevic
+
+# Cost-gate skill — changes touch credit policy.
+/coinis-cost-gates/            @jovan-kovacevic
+
+# Installer + setup scripts.
+/setup                         @jovan-kovacevic
+/scripts/                      @jovan-kovacevic
