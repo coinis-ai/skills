@@ -192,6 +192,15 @@ The recipes above are single moves. The real leverage is chaining them: a produc
 2. **Reframe** ([`coinis-revisions`](coinis-revisions/SKILL.md)): reframes each placement with `revise/resize` — previewing cost via the sibling `…/preview_cost/` before each paid fire — to crop / letterbox the hero into 1:1, 9:16 and 16:9. Each resize returns a NEW creative id and never mutates the hero.
 3. **Campaign** ([`coinis-campaign-flow-cli`](coinis-campaign-flow-cli/SKILL.md)): launches with all three rendered placement creative ids.
 
+## Patterns these recipes share
+
+Four principles run through every recipe above — reach for them by default:
+
+1. **Preview cost, then iterate on the cheap surface.** When a base creative already exists, prefer a `revise/*` over a fresh paid `generate/*` — `revise/ad_copy` is zero-cost (Recipe 6) and `revise/resize` reframes an existing hero for a fraction of a new render (Chain C). Always POST the sibling `…/preview_cost/` before any paid fire.
+2. **Render the hero once, reframe per placement.** One paid `generate` amortized across 1:1 / 9:16 / 16:9 with `revise/resize` (Chain C) beats N full generations.
+3. **The creative `id` is the hand-off token.** Every chain threads the rendered `id` from generate → campaign → report; the campaign step can't reference a creative that hasn't rendered, so let polling finish first (Chains A/B).
+4. **Let the in-MCP playbook own prompts and costs.** Read request bodies and `tokenCost` from `load_skill('creative-generation')` / `preview_cost` at call time — never hardcode a body shape or a token number in the CLI overlay.
+
 ---
 
 For more examples and the full triggering catalogue, see [`tests/marketer-scenarios.md`](tests/marketer-scenarios.md) (day-in-the-life personas) and [`tests/end-to-end-use-cases.md`](tests/end-to-end-use-cases.md) (API-shaped use cases).

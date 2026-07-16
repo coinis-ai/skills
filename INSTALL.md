@@ -177,6 +177,21 @@ If `list_my_workspaces` returns an empty list, the MCP is working but the accoun
 | `list_my_workspaces` errors with an auth failure | Complete the browser login/consent flow, or check the `Authorization` header if your org uses a static token. |
 | Everything registers but tools don't appear | Restart the client since installation. |
 
+## Updating
+
+Update to the latest skills the same way you installed. Marketplace-installed plugins update through Claude Code's `/plugin` menu; the git-based doors update with a pull.
+
+| Install door | Update |
+|---|---|
+| Claude Code — marketplace (Option A) | Update `coinis` from the `/plugin` menu (or re-run `/plugin install coinis`). |
+| Claude Code — local checkout (Option B) | `git pull` in your checkout, then update/reinstall `coinis` from `/plugin`. |
+| Claude Code — symlink (Option C) | `git pull` in your checkout — the symlinks pick it up live, no reinstall. |
+| Codex | Re-run `/plugins install coinis-ltd/skills`. |
+| Cursor | Re-run `@plugins add coinis-ltd/skills`. |
+| Setup script (`~/.coinis/skills`) | Re-run the `curl … \| bash` one-shot — `setup` does `git … pull --ff-only` when the clone already exists — or run the pull directly: `git -C ~/.coinis/skills pull --ff-only`. |
+
+Staying current: `scripts/update-check.sh` checks whether `origin/main` is ahead of your `~/.coinis/skills` clone and prints the exact pull command (`git -C ~/.coinis/skills pull --ff-only`). There is **no CLI-binary step** — this bundle ships no binary, and the Coinis MCP server is server-side, so nothing updates client-side beyond the skills.
+
 ## Uninstalling
 
 ```text

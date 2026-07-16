@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-07-16
+
+### Added
+
+- **CLI-surface UX contract** — every `coinis-*` skill now carries a `## CLI-surface UX rules` block: reply in the user's language, no raw JSON dumps, no plumbing narration, one question at a time, and keep labeled `id`/`jobId` recovery handles. Paid-generation skills additionally frame a declined `preview_cost` / `sufficient: false` as a normal outcome, not an error to retry.
+- `.github/ISSUE_TEMPLATE/config.yml` — routes MCP/auth and account/credit questions to their owning channels so the skills repo's issues stay about skills.
+- `COOKBOOK.md` — a "Patterns these recipes share" closer distilling four cross-cutting principles (preview-then-cheap-iterate, render-hero-once, creative-`id` hand-off, playbook-owns-prompts-and-costs).
+- `INSTALL.md` — an "Updating" section mapping each install door to its update command.
+
+### Changed
+
+- CI (`validate-skills.yml`) now also enforces a `NOT for` routing clause and non-empty `argument-hint` + `allowed-tools` in every skill's frontmatter.
+- `CLAUDE.md` — added a soft ~250–300-line skill budget (overflow belongs in the in-MCP playbook via `load_skill(...)`, not a per-skill `references/` dir) and codified the UX-block requirement; noted that a declined preview / `sufficient: false` is a normal outcome.
+- `CONTRIBUTING.md` — a ratchet against loosening a CLI-surface UX rule without an explicit reason.
+- `.github/ISSUE_TEMPLATE/skill_request.md` — an anti-sprawl gate ("why a separate skill, not an addition?") with a forced choice and routing prompt.
+
 ## [1.2.0] - 2026-06-09
 
 ### Removed

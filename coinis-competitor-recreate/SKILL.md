@@ -89,6 +89,7 @@ After the user consents to the previewed `tokenCost` and you POST, write ONE tur
 | Firing with no `productId` | The endpoint renders for the user's product. Run the [[coinis-image-from-url]] setup to get a `productId` first. |
 | Promising a 1:1 clone of the competitor ad | It's a brand-restyled recreation, not a copy. Confirm semantics via `load_skill('creative-generation')` before describing the output. |
 | Routing a no-competitor-reference request here | If there's no source ad to analyze, use `generate/image_templates` via [[coinis-image-from-url]]. |
+| Treating a declined preview or `sufficient: false` as an error to retry | It's a normal outcome — report the shortfall/decline in one line and stop. Don't re-fire, don't loop the preview, don't check a balance delta. |
 
 ## Red flags — stop and re-check
 
@@ -96,6 +97,18 @@ After the user consents to the previewed `tokenCost` and you POST, write ONE tur
 - About to hardcode a token cost in the surface line → STOP. Quote the `tokenCost` returned by `preview_cost`, never a guessed number.
 - About to fire without a `productId` → STOP. Set up the brand/product first via [[coinis-image-from-url]].
 - About to hardcode the request body from this file → STOP. Confirm field names via `load_skill('creative-generation')`; this skill does not pin the schema.
+
+## CLI-surface UX rules
+
+The CLI surface has no front-end progress cards or approve block, so this skill owns the conversational output contract. Bundle-wide defaults:
+
+1. **Reply in the user's language** — detect it from their first message; MCP field names, endpoint paths, and CLI flags stay English.
+2. **No raw JSON dumps** (no `aiResults[]` arrays, no `call_api` request/response transcripts). Lead with the rendered URL + a one-line summary — but **do** hand back the creative `id`/`jobId` as clearly-labeled trace handles; the async wait model needs them to re-poll and recover ([[coinis-polling]]).
+3. **Never narrate plumbing** — don't say "polling the job", "calling `preview_cost`", "scheduling a wakeup", or name MCP tools; say "generating your creative…".
+4. **One question at a time** — never batch-ask.
+5. **A declined or insufficient cost preview (`sufficient: false`, or the user declines) is a clean stop, not an error to retry** — report the shortfall/decline and wait.
+
+These set the defaults the "Surface the fire" step above builds on; don't restate them.
 
 ## Related skills
 

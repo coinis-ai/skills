@@ -102,6 +102,15 @@ When in doubt, re-read `reports-flow`. Don't infer from field names.
 
 Don't quote paths from memory — resolve via `list_endpoints(filter="reports")` and let `reports-flow` carry the query shape.
 
+## CLI-surface UX rules
+
+The CLI surface has no tree view, column manager, or CSV button, so this skill owns how numbers reach the user — the drill-down and output-formatting rules above are part of it. Bundle-wide defaults:
+
+1. **Reply in the user's language** — metric names, column headers, endpoint paths, and the currency unit stay English (`"Spend: $1,234 (USD)"`).
+2. **No raw JSON dumps in chat** — lead with the report table + a one-line takeaway; expose raw `call_api` output only as the explicit copy-paste export described above.
+3. **Never narrate plumbing** — don't name MCP tools or say "calling `get_overall_report`"; say "pulling last week's numbers…".
+4. **One question at a time** — one drill / scope question per turn.
+
 ## Cross-links
 
 - [[coinis-image-from-url]] — image creative generation flow.

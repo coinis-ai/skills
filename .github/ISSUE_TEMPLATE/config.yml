@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: MCP server, auth/consent, or endpoint behavior
+    url: mailto:support@coinis.com
+    about: The Coinis MCP server not reachable, OAuth/auth-consent failures, or questions about MCP tool/endpoint behavior — owned by the Coinis MCP/platform team, not this skills bundle.
+  - name: Account, workspace, or credit-balance questions
+    url: https://coinis.com
+    about: No workspace, onboarding not finished, Meta account not linked, or credit/token-balance questions — finish onboarding or manage your account at coinis.com.

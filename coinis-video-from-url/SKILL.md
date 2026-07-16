@@ -207,12 +207,25 @@ One short line: `"UGC video #<id> ready: <videoUrl>"`. No menu.
 | Inventing the `prompt` for the avatar / talking-head endpoint | The prompt is the spoken script. Avatar will say whatever you wrote. Always ask the user — content authorship, separate from the spend gate. |
 | Hard-coding a UGC cost from memory | Don't. Read `tokenCost` from the `preview_cost` call for this fire — costs can shift. |
 | Polling at 60s like image generation | Videos render slower than images — observed up to ~9 min. Schedule a wakeup at 180s minimum. |
+| Treating a declined preview or `sufficient: false` as an error to retry | It's a normal outcome — report the shortfall/decline in one line and stop. Don't re-fire, don't loop the preview, don't check a balance delta. |
 
 ## Red flags — stop and re-check
 
 - About to fire `generate_avatar_talking_head` (avatar / talking-head, `avatar/talking_head/`) without an explicit script from the user → STOP. Ask: "What should the avatar say?" (Content gate, separate from the spend gate — still required.)
 - About to fire any paid `generate/*` without having run `preview_cost` and surfaced `tokenCost` + `currentBalance` → STOP. Run the gate first.
 - Polling more often than every 60s → wasteful; bump the interval.
+
+## CLI-surface UX rules
+
+The CLI surface has no front-end progress cards or approve block, so this skill owns the conversational output contract. Bundle-wide defaults:
+
+1. **Reply in the user's language** — detect it from their first message; MCP field names, endpoint paths, and CLI flags stay English.
+2. **No raw JSON dumps** (no `aiResults[]` arrays, no `call_api` request/response transcripts). Lead with the rendered URL + a one-line summary — but **do** hand back the creative `id`/`jobId` as clearly-labeled trace handles; the async wait model needs them to re-poll and recover ([[coinis-polling]]).
+3. **Never narrate plumbing** — don't say "polling the job", "calling `preview_cost`", "scheduling a wakeup", or name MCP tools; say "generating your creative…".
+4. **One question at a time** — never batch-ask. (The avatar-script ask stays its own turn.)
+5. **A declined or insufficient cost preview (`sufficient: false`, or the user declines) is a clean stop, not an error to retry** — report the shortfall/decline and wait.
+
+These set the defaults the "Surface the fire" step above builds on; don't restate them.
 
 ## Related skills
 

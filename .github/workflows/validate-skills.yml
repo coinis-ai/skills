@@ -81,10 +81,12 @@ jobs:
       # CHECK 1 — Frontmatter
       # Every coinis-*/SKILL.md must have YAML frontmatter where:
       #   - name == directory name
-      #   - description is present and starts with "Use when"
-      # Coinis skills do NOT carry a per-skill `version` field, and a
-      # "NOT for" boundary is additive (encouraged, not required), so neither
-      # is enforced here.
+      #   - description is present, starts with "Use when", is <=1024 chars,
+      #     and carries a "NOT for" routing clause
+      #   - argument-hint and allowed-tools are present and non-empty
+      #     (both are mandated by CONTRIBUTING.md)
+      # Coinis skills do NOT carry a per-skill `version` field, so that is not
+      # checked here — version sync across the manifests is CHECK 2.
       # ---------------------------------------------------------------------
       - name: Validate frontmatter (name == dir, description starts with "Use when")
         run: |
@@ -141,6 +143,18 @@ jobs:
               if not desc_str.startswith("Use when"):
                   first = desc_str.splitlines()[0][:60] if desc_str else ""
                   errors.append(f"description must start with 'Use when' (got: '{first}…')")
+              if "NOT for" not in desc_str:
+                  errors.append("description must carry a 'NOT for' routing clause")
+
+          # argument-hint and allowed-tools are mandated by CONTRIBUTING.md and
+          # are universal-in-practice across the bundle; lock them so a new or
+          # edited skill can't silently drop them.
+          arg_hint = fm.get("argument-hint")
+          if not (arg_hint and str(arg_hint).strip()):
+              errors.append("argument-hint missing or empty")
+          allowed = fm.get("allowed-tools")
+          if not (allowed and str(allowed).strip()):
+              errors.append("allowed-tools missing or empty")
 
           for err in errors:
               print(f"::error file={path}::{err}")
