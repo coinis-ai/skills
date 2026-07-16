@@ -113,6 +113,19 @@ Cross-ref the brand-target-decision rule in [[coinis-image-from-url]] — domain
 | Computing batch spend from a balance delta after the run | UC-J2. Balance lags and can move from other causes (top-ups mid-run). Sum the `tokenCost` from `preview_cost` previews instead. |
 | Firing wave 3 before wave 2's `POST /products/` returns | `productId` doesn't exist yet → 422. Wait for each wave to land before starting the next. |
 | Starting a fan-out without previewing its cost | Sum `tokenCost` from a `preview_cost` POST per fire and gate on `sufficient`/`currentBalance` before the first real fire. |
+| Treating a declined preview or `sufficient: false` as an error to retry | It's a normal outcome — surface the projected batch shortfall/decline in one line and stop before any fire. Don't re-fire, don't loop the preview, don't check a balance delta. |
+
+## CLI-surface UX rules
+
+The CLI surface has no front-end progress cards or approve block, so this skill owns the conversational output contract. Bundle-wide defaults:
+
+1. **Reply in the user's language** — detect it from their first message; MCP field names, endpoint paths, and CLI flags stay English.
+2. **No raw JSON dumps** (no `aiResults[]` arrays, no `call_api` request/response transcripts). Lead with the rendered URLs + a one-line summary — but **do** hand back the creative `id`s/`jobId`s as clearly-labeled trace handles; the async wait model needs them to re-poll and recover ([[coinis-polling]]).
+3. **Never narrate plumbing** — don't say "polling the jobs", "calling `preview_cost`", "scheduling wakeups", or name MCP tools; say "generating your creatives…".
+4. **One question at a time** — never batch-ask.
+5. **A declined or insufficient cost preview (`sufficient: false`, or the user declines) is a clean stop, not an error to retry** — surface the projected batch shortfall/decline before any fire and wait.
+
+These set the defaults the "Surface discipline" and "Batch spend-gate" sections above build on; don't restate them.
 
 ## Cross-links
 

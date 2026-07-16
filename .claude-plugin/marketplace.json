@@ -9,7 +9,7 @@
       "name": "coinis",
       "source": "./",
       "description": "Ad creative generation, Meta campaign launch, and performance reports via the Coinis MCP.",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "skills": [
         {
           "name": "image-from-url",

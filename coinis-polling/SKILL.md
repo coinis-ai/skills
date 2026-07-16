@@ -121,6 +121,17 @@ For images / revises, a single 60-s or 30-s wakeup is usually enough; re-poll in
 | Treating `{"error": ""}` as "didn't fire" | For `generate_ugc_video` it bills and creates a record. Verify via `?ordering=-id&limit=5`. |
 | Polling forever on `failed` | `actionStatus: failed` is terminal — read `errorMessage` and stop. |
 
+## CLI-surface UX rules
+
+The CLI surface has no front-end progress cards, so the agent owns how the wait and its result reach the user. Bundle-wide defaults:
+
+1. **Reply in the user's language** — MCP field names, endpoint paths, and `actionStatus` values (`processing`/`success`/`failed`) stay English.
+2. **No raw JSON dumps** (no `aiResults[]` arrays, no `call_api` transcripts). Lead with the rendered URL + a one-line summary — but **do** keep the creative `id`/`jobId` as clearly-labeled trace handles; recovery (sort-by-`id`-desc, direct `GET /{id}/`) depends on them.
+3. **Never narrate plumbing** — don't say "polling the job", "scheduling a wakeup", or name MCP tools; say "still generating — I'll share the link the moment it lands".
+4. **One question at a time** — never batch-ask.
+
+A `failed` `actionStatus` is terminal: surface `errorMessage` and stop; don't retry silently.
+
 ## Cross-links
 
 - [[coinis-image-from-url]] — image generation flow (calls into this skill at step 8).

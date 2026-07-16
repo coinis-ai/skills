@@ -71,6 +71,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<sc
 
 - Skill rules are derived from field-tested behaviour. If you're changing a rule, link to (or quote) the evidence (an MCP response, an observed failure shape, a measurement).
 - Don't loosen a spend gate without an explicit reason; every paid `generate/*` / `revise/*` fire must remain gated behind a `preview_cost` check and explicit user confirmation (`revise/ad_copy` is the only zero-cost exception).
+- Don't loosen a **CLI-surface UX rule** — reply in the user's language, hide plumbing narration, ask one question at a time, no raw JSON dumps, keep labeled recovery handles (`id`/`jobId`) — without an explicit reason in the PR. These are the output contract the CLI surface owns in place of the front end (see any skill's `## CLI-surface UX rules` block).
 - If you remove a "Common mistake" block, leave a note explaining why the mistake is no longer possible.
 
 ## Cross-surface compatibility

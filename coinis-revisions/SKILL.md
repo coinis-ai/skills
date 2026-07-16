@@ -120,6 +120,7 @@ Confirm every path and body against `mcp__coinis__list_endpoints` / `load_skill(
 | Passing a creative `id` to `revise/resize` instead of `sourceImageUrl` | `revise/resize`'s documented body is `{sourceImageUrl, targetAspectRatio}` — fetch the source's rendered `imageUrl` first. |
 | Inventing `targetLanguage` / upscale-factor field names | Only `resize`'s body is documented. For the rest, discover fields via `load_skill('creative-generation')` before firing. |
 | Revising a creative that's still `processing` | The source must be `actionStatus: success` first. Poll it to success ([[coinis-polling]]) before revising. |
+| Treating a declined preview or `sufficient: false` on a paid revise as an error to retry | It's a normal outcome — report the shortfall/decline in one line and stop. Don't re-fire, don't loop the preview, don't check a balance delta. (`revise/ad_copy` is free, so it has no preview to decline.) |
 
 ## Red flags — stop and re-check
 
@@ -127,6 +128,18 @@ Confirm every path and body against `mcp__coinis__list_endpoints` / `load_skill(
 - About to fire a **paid** revise (`variate` / `resize` / `translate` / `upscale`) without running `preview_cost` and getting explicit consent → STOP. Run the gate; fire only on consent AND `sufficient: true`.
 - About to poll for a new creative id after `revise/ad_copy` → STOP. The result is on the source's `aiResults[]`. See [[coinis-polling]].
 - About to fire a revise body with field names you haven't verified (anything beyond `resize`'s `{sourceImageUrl, targetAspectRatio}`) → STOP. `load_skill('creative-generation')` first.
+
+## CLI-surface UX rules
+
+The CLI surface has no front-end progress cards or approve block, so this skill owns the conversational output contract. Bundle-wide defaults:
+
+1. **Reply in the user's language** — detect it from their first message; MCP field names, endpoint paths, and CLI flags stay English.
+2. **No raw JSON dumps** (no `aiResults[]` arrays, no `call_api` request/response transcripts). Lead with the rendered URL — or, for `revise/ad_copy`, the returned copy — plus a one-line summary, but **do** hand back the creative `id`/`jobId` as clearly-labeled trace handles; the async wait model needs them to re-poll and recover ([[coinis-polling]]).
+3. **Never narrate plumbing** — don't say "polling the job", "calling `preview_cost`", "scheduling a wakeup", or name MCP tools; say "generating your revision…".
+4. **One question at a time** — never batch-ask.
+5. **A declined or insufficient cost preview (`sufficient: false`, or the user declines) is a clean stop, not an error to retry** — report the shortfall/decline and wait. (`revise/ad_copy` is free, so it has no such gate.)
+
+These set the defaults the fire-then-surface steps above build on; don't restate them.
 
 ## Related skills
 

@@ -105,6 +105,17 @@ Response handling — be strict, not loose:
 | Treating "looks good" as a launch confirm | Ambiguous. The CLI has no approve button — require an explicit launch word, or re-ask. |
 | Re-emitting the original table after a mid-flow change | Stale. Always re-emit with the diff applied so the user confirms the *current* plan, not the old one. |
 
+## CLI-surface UX rules
+
+The CLI surface has no picker rows or approve block, so this skill owns the conversational contract — the picker-chain and approve-gate translations above are part of it. Bundle-wide defaults:
+
+1. **Reply in the user's language** — MCP field names, endpoint paths, and objectives stay English; budgets are quoted in dollars per the summary table above.
+2. **No raw JSON dumps** (no `call_api` request/response transcripts). Lead with the summary table / confirmation + a one-line takeaway — but **do** keep campaign / ad-set / ad / creative `id`s as clearly-labeled handles.
+3. **Never narrate plumbing** — don't name MCP tools or say "calling `list_endpoints`"; describe steps in product terms ("checking your Meta connection…").
+4. **One question at a time** — the picker-chain rule above generalizes to every prompt, not just pickers.
+
+Launching or editing a live campaign stays gated behind the explicit prose confirm above — never fire on ambiguous approval.
+
 ## Cross-links
 
 - `[[coinis-image-from-url]]` — bundling rule for `generate_*` + downstream steps.
