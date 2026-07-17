@@ -2,8 +2,8 @@
 name: coinis-image-from-url
 description: |
   Use when creating an image creative via the Coinis MCP (`coinis`) and the user supplies (or implies) a product URL the workspace doesn't yet have. Covers the auth checkpoint that blocks silent brand creation, the brand/product setup sequence, and the credit-spend approve gate.
-  NOT for: a product that already exists in the workspace (load the in-MCP `creative-generation` playbook and fire directly); video creatives (use [[coinis-video-from-url]]); the competitor-recreate flow (use [[coinis-competitor-recreate]]); multi-product / multi-format fan-outs (use [[coinis-batch-patterns]]); render-status polling (use [[coinis-polling]]).
-allowed-tools: mcp__coinis__load_skill, mcp__coinis__list_endpoints, mcp__coinis__list_my_workspaces, mcp__coinis__analyze_product, mcp__coinis__generate_image_templates, mcp__coinis__call_api, ScheduleWakeup
+  NOT for: a product that already exists in the workspace (load the in-MCP `creative-generation` playbook and fire directly); video creatives (use [[coinis-video-from-url]]); a named model / authored prompt / arbitrary reference images (use [[coinis-marketplace-models]]); the competitor-recreate flow (use [[coinis-competitor-recreate]]); multi-product / multi-format fan-outs (use [[coinis-batch-patterns]]); render-status polling (use [[coinis-polling]]).
+allowed-tools: mcp__coinis__load_skill, mcp__coinis__list_skills, mcp__coinis__list_endpoints, mcp__coinis__list_my_workspaces, mcp__coinis__list_brands, mcp__coinis__list_products, mcp__coinis__get_product, mcp__coinis__list_creatives, mcp__coinis__call_api, ScheduleWakeup
 argument-hint: <product URL> [format e.g. "square"/"story"] [quantity N] [tone/style hints]
 ---
 
@@ -30,7 +30,16 @@ End-to-end recipe for Coinis MCP (`coinis`) image generation in Claude Code. The
 - User says "create image" / "generate creative" and the workspace's `list_products` returns 0.
 - Any `generate_*` call that needs a `productId` you don't have yet.
 
-**Don't use:** When the product already exists in the workspace — jump straight to the `creative-generation` skill (load via `load_skill`).
+**Don't use:** When the product already exists in the workspace — jump straight to the `creative-generation` skill (load via `load_skill`). When the user named a model, authored a literal prompt, or handed you arbitrary reference images — that's [[coinis-marketplace-models]].
+
+## STOP — is this a BRAND-AWARENESS request? (check FIRST, before any resolution)
+
+Before resolving a workspace or product, decide whether this is a **product ad** or a **brand-awareness post** — they use different endpoints. Owned by the in-MCP `generate-image-templates` playbook; mirrored here because the CLI has no form to route it.
+
+- User asked for **brand awareness / a brand post / an awareness campaign / a post "for &lt;brand&gt;"** and did **not** name a specific product or product URL → this is **NOT** `generate/image_templates`. Resolve the brand (`list_brands(search="&lt;name&gt;")`) and fire **`generate/social_post/`** (preview via `generate/social_post/preview_cost/`) with `brandId`. Do this **even if the brand has products**.
+- User named a product or product URL → product ad → continue with `generate/image_templates` below.
+
+Getting this wrong spends credits on the wrong creative shape. Confirm the exact `social_post` body via `load_skill('creative-generation')` — don't assume the `image_templates` fields carry over.
 
 ## Mandatory pre-flight
 
@@ -48,6 +57,8 @@ These carry validation matrices and the approve-gate rules. The recipe below is 
 ### 1. Resolve workspace
 
 `list_my_workspaces` → pick the highest-balance workspace with `hasMetaConnection: true` unless the user named one. Cache the id.
+
+**An empty `list_my_workspaces` result means "unknown", not "none".** The convenience tool has been observed returning no output on a session with hundreds of workspaces. Don't tell the user they have no workspace — fall back to `GET /api/workspaces/` (a different, larger shape keyed differently: `tokenBalance` IS present, but Meta connectivity is the `facebookAccess` field, not `hasMetaConnection`), then ask which one and take the display `name` verbatim.
 
 ### 2. Analyze the product URL (free, sync)
 
@@ -117,7 +128,14 @@ Before firing `generate_image_templates`, POST the sibling `…/preview_cost/` e
 - `quantity`: default `1`. If the user said "N images", use single format × quantity N (avoids the story+reel 9:16 collapse).
 - `tone`: default `professional`. Override only if brand `voiceTags` clearly imply playful/casual/luxury.
 - `style`: default `clean-minimal`. Tech/SaaS → keep; lifestyle/consumer → consider `bold` or `photo-realistic`.
-- `additionalInformations`: one concrete scene line derived from product name + description + brand vertical/palette. NO placeholders, NO "AI choice".
+- `resolution`: a **cost-affecting** field — `1K` / `2K` / `4K`, and the price scales with it. Explore cheap, finish expensive: prove a direction at the default resolution, then re-fire only the keeper at `2K`/`4K`. **The body you preview MUST equal the body you fire, `resolution` included** — a 4K quote fired at 1K, or vice-versa, mismatches the charge. Only send it when the user picked a size.
+- `additionalInformations`: **not "one scene line" — a 4-part spine addressing a compositor**, in order: (1) the **angle** / marketing hook for this specific creative, (2) the scene / setting, (3) any brand-direction cue (palette, mood — see cross-branding note below), (4) **reserved negative space** where a headline/CTA will sit if one is wanted on-canvas. Derive it from product name + description + brand vertical/palette. NO placeholders, NO "AI choice".
+
+**Letterforms — the model cannot spell.** `generate/image_templates` has **no `prompt` field and no negative-prompt field**; `additionalInformations` is the only text channel, and exclusions go in **positively** ("clean uncluttered background", not "avoid clutter"). Do **not** ask it to render a wordmark, a logo, or an exact copy string — the diffusion model invents and misspells them, and no `revise/*` repairs baked-in text. For literal on-canvas words, either request clean negative space and composite the copy downstream, or generate the ad-copy TEXT separately via `revise/ad_copy` ([[coinis-revisions]]) and place it yourself. Brand-exact logos/hex are unreachable by the generator; a paid re-fire will not fix them.
+
+**Cross-branding is prompt-only.** The backend styles the creative with the **product's own brand** (colors + voice, resolved from `productId`) — you cannot attach a different brand's identity via a `brandId` from history. To put brand B's look on brand A's product (e.g. a Coinis end-card on a partner product), write that direction into `additionalInformations`; the creative still attaches to the product's own brand server-side.
+
+**One POST per art direction, not per format.** A single POST with multiple `outputFormats` gives every format the *same* `additionalInformations` — there's no per-format layout steer. When each placement needs its own composition, fire one POST per art direction (see the multi-angle fan-out in [[coinis-batch-patterns]]); splitting a multi-placement set across formats in one call re-rolls the look and it drifts.
 
 **Honest count math:**
 
@@ -157,6 +175,18 @@ Right after the generate POST lands, write a turn that bundles:
 
 The cost was already surfaced and consented to at the preview_cost step; this turn confirms what landed.
 
+### 7b. User-supplied images — register BEFORE generating from them
+
+When the user attaches a photo (a product shot, a face to feature) and you'll base a generation on it, the BE needs a **public https URL** — it cannot read a CLI chat attachment, a local path, or base64. Host it first:
+
+```
+POST /api/workspaces/{wid}/generated_creatives/presigned_upload_url/
+body: {"filename": "...", "contentType": "..."}     ← lowercase `filename`; `fileName` 422s "Field required: filename"
+→ PUT the bytes to the returned URL → the public URL is the reference
+```
+
+Feed the resulting public URL as the product image (via `create_product` `image_urls`) or, for a reference-locked / likeness / named-person render, use [[coinis-marketplace-models]] (which pins `images[]` to the render). Preserving a specific person's likeness is a **reference-image** problem, not a prompt adjective — the marketplace path owns it.
+
 ### 8. Poll for the rendered URL
 
 Polling cadences, the `aiResults[]` shape (`revise/ad_copy` has a different result shape that doesn't create a new id), the sort-by-`id`-desc rule for recovery, and the `ScheduleWakeup` integration are owned by [[coinis-polling]]. Short version: image_templates renders in 60–80 s (verified 2026-05-28 across `#3632`/`#3635`/`#3637`); first poll at 60 s.
@@ -192,6 +222,12 @@ Wait for `actionStatus: success`, then quote `imageUrl`. Rendered assets land on
 | Putting `story` + `reel` in `outputFormats` and promising 2 creatives | Both are 9:16 — they collapse. You get 1. Use single-format × N quantity for honest counts. |
 | Sending both `image_urls` and `image_keys` on `create_product` | 422. They are mutually exclusive. |
 | Retrying the import via `import_from_url` when homepage scrape returns 0 SKUs | The endpoint is for catalogue pages, not homepages. Use `analyze_product` on the specific product page instead. |
+| Firing `image_templates` for a "brand awareness post for &lt;brand&gt;" with no product | Wrong endpoint. That's `generate/social_post/` with `brandId` — even if the brand has products. Check the brand-awareness STOP first. |
+| Asking `additionalInformations` to render a wordmark / logo / exact copy | No prompt field, no text engine — the model misspells baked-in text and no `revise/*` fixes it. Reserve negative space; composite copy, or use `revise/ad_copy` for the text. |
+| Treating `list_my_workspaces` returning empty as "user has no workspace" | It means "unknown". Fall back to `GET /api/workspaces/` and ask. |
+| Passing a chat attachment / local path as a product image | BE needs a public https URL. Register via `presigned_upload_url` (`filename`, lowercase) first. |
+| One POST with several `outputFormats` for placements that each need their own look | Same `additionalInformations` for all → drifted look. One POST per art direction. |
+| Firing `2K`/`4K` on the exploration pass | `resolution` re-prices the fire. Prove the direction cheap, re-fire the keeper at higher res; preview the exact resolution you'll fire. |
 | Treating a declined preview or `sufficient: false` as an error to retry | It's a normal outcome — report the shortfall/decline in one line and stop. Don't re-fire, don't loop the preview, don't check a balance delta. |
 
 ## Red flags — stop and re-check
@@ -215,6 +251,7 @@ These set the defaults the "Surface the fire" step above builds on; don't restat
 
 ## Related skills
 
+- [[coinis-marketplace-models]] — model-keyed `generate/marketplace_proxy`; named model, literal prompt, arbitrary reference images, identity lock across a series.
 - [[coinis-video-from-url]] — video creative generation (UGC, V2V, avatar). Distinct spend rules; avatar is a content gate.
 - [[coinis-polling]] — render-status polling, `aiResults[]` shape, `{"error":""}` recovery.
 - [[coinis-batch-patterns]] — multi-product / multi-format fan-out and honest count math.

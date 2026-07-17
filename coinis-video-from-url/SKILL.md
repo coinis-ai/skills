@@ -3,7 +3,7 @@ name: coinis-video-from-url
 description: |
   Use when creating a video creative (UGC URL-mode, UGC image-mode / stills-to-video, video-to-video, cinematic, avatar, or talking-head) via the Coinis MCP (`coinis`). Covers the URL-driven UGC pipeline whose accepted fields differ sharply from image generation, the brand-target rule (silent create on unknown domain), the per-render credit cost (call `preview_cost` for the figure), and the longer async render times.
   NOT for: image creatives (use [[coinis-image-from-url]]); revising an existing creative via the `revise_*` family (no URL, different flow); polling cadence mechanics (use [[coinis-polling]]).
-allowed-tools: mcp__coinis__load_skill, mcp__coinis__list_endpoints, ScheduleWakeup
+allowed-tools: mcp__coinis__load_skill, mcp__coinis__list_skills, mcp__coinis__list_endpoints, mcp__coinis__list_my_workspaces, mcp__coinis__list_avatars, mcp__coinis__get_avatar, mcp__coinis__call_api, ScheduleWakeup
 argument-hint: <product-page-url> [aspect-ratio 9:16|16:9] [ugc|video-to-video|avatar|talking-head]
 ---
 
@@ -27,7 +27,7 @@ The Coinis MCP exposes several video generators. They differ in input shape, cos
 
 **Avatar/talking-head ask remains** because the user MUST hand the agent the words the avatar speaks — there is no sensible default for spoken script. That's a content gate, separate from the spend gate.
 
-**Avatar endpoints additionally require an `avatarId`** that is NOT discoverable via `list_endpoints` — verified 2026-05-28. Until a listing endpoint is added (not yet exposed as of 2026-05-28), these endpoints cannot be called from the CLI surface without the user supplying the avatar id manually.
+**Avatar endpoints additionally require an `avatarId`, and it IS discoverable — via the dedicated `list_avatars` / `get_avatar` tools** (and `GET /api/workspaces/{wid}/avatars/`), not via `list_endpoints`. `list_avatars(workspace_id=…)` returns the workspace's stock + custom avatars, each with an `id` to pass as `avatarId`. (An earlier version of this skill claimed avatars were uncallable from the CLI — that was looking in `list_endpoints`; the avatar registry has its own tool.) When the user wants a specific avatar, `list_avatars` first and let them pick; don't ask them to supply a raw id.
 
 ## When to Use
 
@@ -46,6 +46,14 @@ The Coinis MCP exposes several video generators. They differ in input shape, cos
 | `generate_video_to_video` | `/generated_creatives/generate/video_to_video/` | source video, prompt | Per-render — run `preview_cost` before firing. | Style transfer / re-animation. |
 | `generate_cinematic_video` | `/generated_creatives/generate/cinematic_video/` | see `creative-generation` | Per-render — run `preview_cost` before firing. | Cinematic endpoint, 15s/30s. Has its own in-MCP skill `generate-cinematic-video`; don't invent the body shape. |
 | `generate_avatar_talking_head` (avatar video / talking-head) | `/generated_creatives/avatar/talking_head/` | `productId`, `prompt` (REQUIRED — the spoken script) | Per-render — run `preview_cost` before firing. | `prompt` IS the script. Never invent it; ask the user. Talking-head adds provider-specific avatar/voice params. |
+
+**For a named/chosen video model, an authored prompt, or pinning an arbitrary public image URL as the literal first frame — that's `generate/marketplace_proxy` ([[coinis-marketplace-models]]), not the pipelines above.** The pipelines here pick the provider server-side; `marketplace_proxy` is the only video surface where the model and the literal prompt are yours. Pinning a first frame there is `images` + `imageRole: "first-frame"` with no upload round-trip.
+
+**A hard param constraint re-shops the pipeline — it does not round the user up.** Each pipeline has a fixed contract: the cinematic (TVC) path only serves its fixed long durations, so a "5 s clip" request cannot be served by rounding up to the shortest one — pivot to `marketplace_proxy` (which does short durations) and reload that playbook. When a duration/aspect/param falls outside one family's contract, **switch families, don't negotiate the brief**.
+
+**The `…/preview_cost/` route is not always a sibling of the fire path.** `generate/cinematic_video/preview_cost/` 404s ("not in the OpenAPI catalogue"); the working preview for that pipeline is `generate/v1/tvc/submit/preview_cost/`. A "not in the catalogue" error is a **route-discovery trigger** (`list_endpoints(filter="preview_cost")`), not proof the capability is gone. Never assume `<fire_path>/preview_cost/` exists — confirm it.
+
+**No music or audio model exists on this MCP.** A brief asking for a music bed or voiceover track is a capability boundary, not a retryable failure — say so and let the user plan audio outside the platform. Never substitute a video model for a music request.
 
 **`generate_ugc_video` failure-mode notes** (pulled out of the table above so the cells stay terse):
 
@@ -118,15 +126,15 @@ body: {
 }
 ```
 
-Capture `id` (creative id) and `jobId` (trace handle). The authoritative cost figure is the `tokenCost` from the `preview_cost` call you ran before firing — quote that.
+Capture `id` (creative id) and `jobId` (trace handle). The figure to quote is the `tokenCost` from the `preview_cost` call you ran before firing — never a balance delta.
 
 ### 5. Surface the fire — single message, plan + result combined
 
 Right after the POST, write ONE turn that bundles:
 
-- The plan that was fired (workspace, `currentBalance` from `preview_cost`, `url`, `aspectRatio`, brand, `tokenCost`, render ETA ~2–5 min).
+- The plan that was fired (workspace, `currentBalance` from `preview_cost`, `url`, `aspectRatio`, brand, `tokenCost`, render ETA ~2–5 min). Note the quote is a **reservation upper bound** on video — settled spend comes off the creative record later ([[coinis-polling]]), so don't present the quote as the final cost.
 - The returned creative `id` and `jobId`.
-- A one-liner inviting redirect: "Wrong vibe? Say what to change and I'll re-fire."
+- **Be honest about what a re-fire can steer.** UGC URL mode is URL-driven — a re-fire is a fresh stochastic **re-roll off the same `url` + `aspectRatio`**, not a redirect. Those two are the only levers you actually control; don't invite "say what to change" as if scene/tone/script were tunable here (the BE drops those fields). If the user wants real art direction over a video, that's `marketplace_proxy` ([[coinis-marketplace-models]]) or a different product page URL.
 
 The cost was surfaced and consented before the POST (via `preview_cost`); this turn confirms what was fired and hands back the ids.
 
@@ -187,7 +195,7 @@ One short line: `"UGC video #<id> ready: <videoUrl>"`. No menu.
 | Video-to-video | POST | `/api/workspaces/{wid}/generated_creatives/generate/video_to_video/` |
 | Cinematic video | POST | `/api/workspaces/{wid}/generated_creatives/generate/cinematic_video/` |
 | Avatar video / talking-head | POST | `/api/workspaces/{wid}/generated_creatives/avatar/talking_head/` |
-| Preview cost (sibling of any paid generate/revise) | POST | `/api/workspaces/{wid}/generated_creatives/generate/<endpoint>/preview_cost/` |
+| Preview cost (usually a sibling of the paid generate/revise — confirm; cinematic's lives at `generate/v1/tvc/submit/preview_cost/`) | POST | `/api/workspaces/{wid}/generated_creatives/generate/<endpoint>/preview_cost/` |
 | Read creative | GET | `/api/workspaces/{wid}/generated_creatives/{cid}/` |
 
 ## Common mistakes
@@ -229,14 +237,15 @@ These set the defaults the "Surface the fire" step above builds on; don't restat
 
 ## Related skills
 
+- [[coinis-marketplace-models]] — model-keyed `generate/marketplace_proxy` video: named model, authored prompt, first-frame pinning, identity lock. Where a param-constraint pivot sends you.
 - [[coinis-image-from-url]] — image creative generation; brand-target-decision rule.
-- [[coinis-polling]] — render-status polling and `ScheduleWakeup` cadences per video type.
+- [[coinis-polling]] — render-status polling, settled-spend-from-record, and `ScheduleWakeup` cadences per video type.
 - [[coinis-batch-patterns]] — multi-product video fan-out.
 - In-MCP `creative-generation` (`load_skill('creative-generation')`) — owns the `preview_cost` spend gate and the `generate/*` + `revise/*` body shapes (including UGC image mode).
 - In-MCP `generate-cinematic-video` (`load_skill('generate-cinematic-video')`) — body shape for `generate/cinematic_video`.
 
 ## Why this skill exists
 
-The UGC URL-mode body shape is sharply different from `generate_image_templates`, and the BE silently drops the fields that don't belong — sending `script` / `tone` / `language` / `quantity` returns a 200 but ignores those values. That trap, plus the URL-mode-vs-image-mode split (URL mode rejects raw images; image mode animates uploaded stills), plus the discovery-stage refund behaviour, plus the avatar-id discovery gap, are all worth capturing once instead of re-discovering them by burning videos.
+The UGC URL-mode body shape is sharply different from `generate_image_templates`, and the BE silently drops the fields that don't belong — sending `script` / `tone` / `language` / `quantity` returns a 200 but ignores those values. That trap, plus the URL-mode-vs-image-mode split (URL mode rejects raw images; image mode animates uploaded stills), plus the discovery-stage refund behaviour, plus the avatar registry living in `list_avatars` (not `list_endpoints`), plus the fact that a re-fire re-rolls rather than steers, are all worth capturing once instead of re-discovering them by burning videos.
 
 The spend gate is the in-MCP `creative-generation` playbook's `preview_cost` model — surface `tokenCost` + `currentBalance` and fire only on consent AND `sufficient: true`; the avatar script ask is preserved as a separate content gate because the spoken words are authorial content, not a cost decision.

@@ -42,6 +42,8 @@ If you have not loaded it, you are guessing. Load it.
 
 If the user says "launch a campaign with the UGC video you just generated", that creative's render must be finished first. Cross-ref `[[coinis-polling]]` for the wait pattern. Do NOT bundle a `generate_*` call with the campaign-launch flow in a single approve — the creative `id` doesn't exist until the render lands, the same way `[[coinis-image-from-url]]` forbids bundling generate with anything downstream. Sequencing is: render → poll to `success` → attach to ad.
 
+**`actionStatus: success` is a render signal, not a quality signal — open the asset before attaching it to a live ad.** A creative can finish with a misspelled wordmark or a garbled caption baked in and still report `success` (a defect the poll loop can't see — `[[coinis-marketplace-models]]` letterform ban). Launching a campaign is high-impact and outward-facing; view the rendered creative against the brief before it goes live, not after spend starts.
+
 ### 3. Endpoint discovery, not endpoint invention
 
 Before composing any campaign body, run `list_endpoints(filter="campaigns")` to see the routes the MCP actually exposes today (campaigns, ad sets, ads, plus their read / update / delete variants — shapes live in the catalogue, not in memory). The canonical `campaign-flow` skill covers required body fields; the catalogue confirms paths and query params. Don't fabricate either.

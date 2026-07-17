@@ -48,6 +48,7 @@ If your skill needs internal Coinis business or strategy context to make sense, 
 - Markdown tables are preferred for endpoint/option grids.
 - Use code-fenced commands and JSON bodies verbatim — do not paraphrase request shapes.
 - When citing the MCP server, use the literal name `coinis` (the MCP tool prefix `mcp__coinis__*`).
+- **Anywhere we name a generation model — in ANY file — use Seedance 2.0 or newer** (`seedance-2.0`, `seedance-2.0-fast`). This covers skill prose, `COOKBOOK.md` trigger phrasings, eval scenarios, and README copy alike; a quoted *user phrasing* ("use X for the hero clip") is a model example too. Never a superseded tier (`seedance-1.5-pro`, `seedance-1.0-pro*`) and never another vendor's model as the default/recommended option. Check with a **bare-family** grep, not a versioned one — `grep -rniE '\b(veo|seedance|gemini|grok|runway|aleph|gen4|imagen|sora|kling|pika|luma)\b' --include='*.md' .` — since `veo-3` misses a bare "Veo". Two deliberate exceptions: the `preview_cost` 422 illustration may echo a non-Seedance variant when it documents the *validator's structure* (e.g. `HappyHorseRequest` naming its required `images`), and this rule itself names the forbidden tiers. The live catalogue is still discovered at run time via the 422 probe and never hardcoded — this governs the *examples we write*, not what the agent may fire.
 
 ## Where things live
 

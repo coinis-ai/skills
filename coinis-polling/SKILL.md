@@ -26,7 +26,7 @@ Cadences below are derived from live-run measurements of each endpoint.
 | `generate/ugc_video` | 180 s | observed ~9 min (past the original 2–5 min envelope) | Long. Use `ScheduleWakeup(delaySeconds=180)`. |
 | `generate/cinematic_video` | 180 s | no live data — match UGC heuristic | Long video renderer; match UGC cadence and keep waking up past the 2–5 min envelope. |
 | `generate/video_to_video` | 180 s | unverified (processing at report time in run logs) | Match UGC cadence. |
-| `generate/avatar/generate`, `generate/avatar/talking_head` | 180 s | no live data — match UGC heuristic | Avatar discovery blocked on `avatarId` in catalogue. |
+| `generate/avatar/generate`, `generate/avatar/talking_head` | 180 s | no live data — match UGC heuristic | `avatarId` is discoverable via `list_avatars`/`get_avatar` (not `list_endpoints`) — see [[coinis-video-from-url]]. |
 
 ## The GET shape
 
@@ -36,11 +36,26 @@ GET /api/workspaces/{wid}/generated_creatives/{cid}/
 
 Watch `actionStatus`:
 
-- `processing` → keep polling.
-- `success` → `imageUrl` (or `videoUrl`) is now populated and authoritative. Quote that URL.
-- `failed` → read `errorMessage`. Stop polling. Surface to user.
+- `processing` → keep polling. The submit response never proves success: `imageUrl`/`videoUrl` come back `null` and `errorMessage` is `null` even on jobs that later fail. Keep a labeled `jobId` index and poll to a terminal state.
+- `success` → `imageUrl` (or `videoUrl`) is now populated and authoritative. **`success` is a liveness signal, not a quality check** — see "Inspect before you quote" below.
+- `failed` → read `errorMessage`. Stop polling this id. **`failed` still billed** — see "A failed render billed" below.
 
-Rendered assets land on the workspace's configured CDN; the GET response is the only authoritative source for the final URL.
+Rendered assets land on the workspace's configured CDN; the GET response is the only authoritative source for the final URL. Reconstructing a URL from a CDN pattern is not recovery — GET the record.
+
+## Inspect before you quote
+
+**Never deliver, describe, or vouch for a render you haven't opened.** `actionStatus: success` proves the job finished, not that it's correct — a video model can return `success` with a misspelled wordmark or a fabricated outro burned into the frame ([[coinis-marketplace-models]] letterform ban), and the wait loop cannot see it. Before quoting the URL to the user or attaching it to an ad, open the returned asset and check it against the brief. This is the last gate before a defect ships to a paying advertiser.
+
+## A failed render billed — diagnose, don't blind-retry
+
+`actionStatus: failed` is terminal **for the poll**, not for the request, and it **still reserved/charged tokens** in the observed cases. Two rules:
+
+- **Report the failed spend.** Read the actually-charged cost off the record (below); don't assume a failure was free.
+- **Change the config, not the wording, and never blind-fire `…/{id}/retry/`.** `/retry/` re-runs the identical body — if the provider rejected it once (`retryable: false`), it will again. When `errorMessage` is boilerplate ("Generation failed. Please try again or adjust your prompt."), diagnose what the provider likely choked on, **reword the prompt while holding model + params**, re-run the spend gate (it's a new fire), and fire as a fresh generation. A degraded/rewritten request shape is the retry; the same body is not.
+
+## Report SETTLED spend from the record, not the quote
+
+The `preview_cost` quote (`{tokenCost, breakdown, currentBalance, sufficient}`) is a **reservation upper bound**, especially on video (observed: 130 quoted, 24 settled per clip). The authoritative charge is `aiGenerationTokenCost` on the creative record — it reflects the real settlement and **survives `failed`**. When you report what a run cost, read it from the record and reconcile against the quote; never present the quote as spend, and never derive spend from a `currentBalance` delta (it lags and moves with top-ups).
 
 ## `aiResults[]` — the child-job shape
 
@@ -73,14 +88,14 @@ To poll: `GET /generated_creatives/{source_id}/`, then find the entry in `aiResu
 
 ## Sort / listing rules
 
-- **Sort by `id` desc, NOT `createdAt`.** Bulk image fans-out write the same `createdAt` timestamp across N records (e.g. `quantity=4` returns 4 creatives with identical timestamps). `id` is monotonic and unambiguous:
+- **Sort by `id` desc, NOT `createdAt`.** Bulk image fans-out write the same `createdAt` timestamp across N records (e.g. `quantity=4` returns 4 creatives with identical timestamps). `id` is monotonic and unambiguous.
+- **The page-size param is `page_size`, NOT `limit`.** `limit` is not an accepted query param on this endpoint — observed accepted params are `page_size`, `page`, `search`, `ordering`, `creative_type`. A `limit` value is silently ignored, so you get the default (large) page.
+- **Listing `generated_creatives` is a context bomb — keep `page_size` tiny.** Each row inlines heavy fields; even `page_size=2` has been observed exceeding the tool-result budget. Never list to inspect content — hit `GET /generated_creatives/{id}/` directly for a creative whose id you already have.
+- **`search` on this endpoint returns false negatives** — `total:0` is not proof of absence. Confirm by paging `ordering=-id`, not by trusting a `search` miss.
 
   ```
-  GET /api/workspaces/{wid}/generated_creatives/?ordering=-id
+  GET /api/workspaces/{wid}/generated_creatives/?ordering=-id&page_size=3
   ```
-
-- **Don't use the list endpoint to find a single creative you already have the id for.** It's verbose and pages over the whole workspace. Hit `GET /generated_creatives/{id}/` directly.
-- For post-hoc recovery (see next section), `?ordering=-id&limit=5` is the right shape.
 
 ## `{"error": ""}` — post-hoc verification
 
@@ -89,7 +104,7 @@ Some endpoints return `{"error": ""}` while still creating a billed record. Veri
 Recovery shape when the response is empty but you suspect a record was created:
 
 ```
-GET /api/workspaces/{wid}/generated_creatives/?ordering=-id&limit=5
+GET /api/workspaces/{wid}/generated_creatives/?ordering=-id&page_size=3
 ```
 
 Find the latest record whose `requestJson.url` (or `productId` / `brandId`) matches the call you just made. That's the creative — poll it normally.
@@ -109,6 +124,22 @@ GET /api/workspaces/{wid}/generated_creatives/{cid}/
 
 For images / revises, a single 60-s or 30-s wakeup is usually enough; re-poll inline if the first hit returns `processing`.
 
+**The render wait is a work slot.** Fire the async generation, schedule the wakeup, then spend the render window on every step that doesn't depend on the pending output — resolving the next product, previewing the next fire's cost, drafting copy. Don't block a multi-minute video render doing nothing. An interrupted poll is **never** a reason to re-fire a paid generation — recover via the `id`/`jobId` handles you kept.
+
+## Failure taxonomy — five distinct outcomes
+
+Don't collapse these into "it failed, retry":
+
+| Outcome | What it is | Recovery |
+|---|---|---|
+| `422` | Bad request shape — nothing fired, nothing charged | Fix the body and re-fire. |
+| `{"error": ""}` | Serializer failed AFTER the record was created + billed | Recover the record via `?ordering=-id&page_size=3`; poll it. NOT a no-charge signal. |
+| `actionStatus: failed` | Provider rejected the render; **billed** | Diagnose + reword + re-gate (above). Don't `/retry/` the same body. |
+| Connector invalidated (transport / 401) | The MCP session dropped mid-run; **nothing charged** | Reconnect and re-fire the unchanged body — it's transport, not a content failure. An empty `claude mcp list` is not proof the server is gone. |
+| User declined the preview / `sufficient: false` | A clean stop, not an error | Report the shortfall/decline and wait. Don't re-fire. |
+
+Never swap in another connected generation MCP to route around a Coinis failure — a Coinis ad creative stays on `coinis`.
+
 ## Common mistakes
 
 | Mistake | Reality |
@@ -118,7 +149,8 @@ For images / revises, a single 60-s or 30-s wakeup is usually enough; re-poll in
 | Sorting `GET /generated_creatives/` by `createdAt` desc to find "the latest" | Unreliable — batched creatives share `createdAt`. Sort by `id` desc. |
 | Listing the whole workspace to find a known creative id | Don't. Hit `GET /{id}/` directly. |
 | Looking for a new creative id after `revise/ad_copy` | There isn't one. The result is on the source's `aiResults[]`. |
-| Treating `{"error": ""}` as "didn't fire" | For `generate_ugc_video` it bills and creates a record. Verify via `?ordering=-id&limit=5`. |
+| Treating `{"error": ""}` as "didn't fire" | For `generate_ugc_video` it bills and creates a record. Verify via `?ordering=-id&page_size=3`. |
+| Paging the listing with `limit=` | `limit` is silently ignored — the param is `page_size`. And keep it tiny; the listing is a context bomb. |
 | Polling forever on `failed` | `actionStatus: failed` is terminal — read `errorMessage` and stop. |
 
 ## CLI-surface UX rules

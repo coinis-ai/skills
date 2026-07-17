@@ -9,7 +9,7 @@
       "name": "coinis",
       "source": "./",
       "description": "Ad creative generation, Meta campaign launch, and performance reports via the Coinis MCP.",
-      "version": "1.2.1",
+      "version": "1.3.0",
       "skills": [
         {
           "name": "image-from-url",
@@ -20,6 +20,11 @@
           "name": "video-from-url",
           "path": "coinis-video-from-url",
           "invoke": "/coinis:video-from-url"
+        },
+        {
+          "name": "marketplace-models",
+          "path": "coinis-marketplace-models",
+          "invoke": "/coinis:marketplace-models"
         },
         {
           "name": "competitor-recreate",

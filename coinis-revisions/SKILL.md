@@ -63,13 +63,38 @@ Use when the user wants **ad-copy text** (headlines, primary texts, descriptions
 - The product is **new / no existing creative to anchor on**, or the user wants a different product, tone, or style → fresh `generate/image_templates` via [[coinis-image-from-url]].
 - Rule of thumb: "more like THIS one" → `variate`. "make me an image of X" with no anchor creative → `generate`.
 
+## Route by the defect the user named — `variate` does not FIX
+
+`revise/variate` is a **blind re-roll**: it produces fresh siblings in the source's lane, with **no critique channel** — it cannot act on "the face is wrong" or "the text is misspelled". Routing a **named defect** to `variate` just spends credits on another random draw that may reproduce the flaw.
+
+When the user rejects a creative, first **name the defect**, then route to the **narrowest** endpoint that addresses it — and **never re-POST the identical body**:
+
+| The user's complaint | Route |
+|---|---|
+| "wrong frame / need a story version" | `revise/resize` (aspect reframe) |
+| "wrong language" | `revise/translate` |
+| "need it bigger / print-res" | `revise/upscale` |
+| "give me more like this, I like it" | `revise/variate` (the ONE case variate fits) |
+| "the text is misspelled / a wordmark is garbled" | **No revise fixes baked-in text.** Regenerate with the copy composited out, or get the ad-copy TEXT via the zero-cost `revise/ad_copy` and place it yourself ([[coinis-marketplace-models]] letterform ban). |
+| "the product/person looks wrong" | A reference-locked **fresh** generate ([[coinis-marketplace-models]]), not a revise — the source has the wrong subject baked in. |
+
+A rendered creative is a **durable asset** — classify the complaint before re-firing a paid revise or generate; don't reflexively re-roll. Every mis-routed re-roll is a `preview_cost` gate the user paid through for nothing.
+
+## Establish provenance before you act
+
+Before revising, know **what the creative is**: MCP-made (has a `generated_creatives` id you can revise), platform-UI-made (may need to be looked up first), or a local file the user downloaded (no id — you cannot `revise/*` it; it must be re-registered or regenerated). Acting on a misclassified source wastes a fire. If the user references "the video from earlier" as a **continuity anchor** for a NEW creative ("make one related to this"), that is a **reference asset on a fresh generate**, not a `revise/variate` source — cross-medium "related to this" misroutes to variate constantly.
+
+## Iteration is the norm — "done" is the user's word
+
+**The first render is rarely the deliverable.** Budget several render/critique loops; the bar for "done" is the user's **explicit acceptance**, not `actionStatus: success`. And **a new brief is a new fire** — when the user changes the concept, never carry the previous creative's product, scene line, or params forward; seed a fresh generate from the new brief (optionally reusing a prior successful creative's stored `requestJson` as a starting shape, not its content). Record the deviations the user accepted so a later round doesn't re-offer a fix they already declined to pay for.
+
 ## Prerequisite — every revise needs a source
 
 A `revise/*` call operates ON an existing creative. Before firing:
 
 1. You need the **source creative `id`** (and for `revise/resize`, the source's rendered `sourceImageUrl` / `imageUrl`).
 2. The source must have **rendered** (`actionStatus: success`) — you can't reliably revise a creative that's still `processing` or `failed`. If the user references a creative that hasn't landed, poll it to `success` first (cadences in [[coinis-polling]]) before revising.
-3. If the user names a creative by description ("the square one from earlier") and you don't have the id, recover it via `GET /api/workspaces/{wid}/generated_creatives/?ordering=-id&limit=5` (sort by `id` desc, NOT `createdAt` — see [[coinis-polling]]).
+3. If the user names a creative by description ("the square one from earlier") and you don't have the id, recover it via `GET /api/workspaces/{wid}/generated_creatives/?ordering=-id&page_size=3` (sort by `id` desc, NOT `createdAt`; the page-size param is `page_size`, not `limit` — see [[coinis-polling]]).
 
 Without a valid source id (or `sourceImageUrl` for `resize`) the revise call has nothing to act on and will fail.
 
@@ -145,6 +170,7 @@ These set the defaults the fire-then-surface steps above build on; don't restate
 
 - [[coinis-polling]] — `revise/*` poll cadence, the `aiResults[]` shape `revise/ad_copy` writes to, and the sort-by-`id` recovery rule.
 - [[coinis-image-from-url]] — fresh image generation; the `variate` vs `generate` decision routes here.
+- [[coinis-marketplace-models]] — reference-locked fresh generate for a "wrong subject" defect; the letterform ban behind "no revise fixes baked-in text".
 - [[coinis-video-from-url]] — fresh video generation (out of scope for `revise/*`).
 
 ## Why this skill exists
