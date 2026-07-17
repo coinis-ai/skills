@@ -3,7 +3,7 @@ name: coinis-image-from-url
 description: |
   Use when creating an image creative via the Coinis MCP (`coinis`) and the user supplies (or implies) a product URL the workspace doesn't yet have. Covers the auth checkpoint that blocks silent brand creation, the brand/product setup sequence, and the credit-spend approve gate.
   NOT for: a product that already exists in the workspace (load the in-MCP `creative-generation` playbook and fire directly); video creatives (use [[coinis-video-from-url]]); a named model / authored prompt / arbitrary reference images (use [[coinis-marketplace-models]]); the competitor-recreate flow (use [[coinis-competitor-recreate]]); multi-product / multi-format fan-outs (use [[coinis-batch-patterns]]); render-status polling (use [[coinis-polling]]).
-allowed-tools: mcp__coinis__load_skill, mcp__coinis__list_skills, mcp__coinis__list_endpoints, mcp__coinis__list_my_workspaces, mcp__coinis__list_brands, mcp__coinis__list_products, mcp__coinis__get_product, mcp__coinis__list_creatives, mcp__coinis__call_api, ScheduleWakeup
+allowed-tools: mcp__coinis__load_skill, mcp__coinis__list_skills, mcp__coinis__list_endpoints, mcp__coinis__list_my_workspaces, mcp__coinis__list_brands, mcp__coinis__list_products, mcp__coinis__get_product, mcp__coinis__list_creatives, mcp__coinis__analyze_and_create_product, mcp__coinis__analyze_and_create_brand, mcp__coinis__generate_image_templates, mcp__coinis__call_api, ScheduleWakeup
 argument-hint: <product URL> [format e.g. "square"/"story"] [quantity N] [tone/style hints]
 ---
 
@@ -31,6 +31,8 @@ End-to-end recipe for Coinis MCP (`coinis`) image generation in Claude Code. The
 - Any `generate_*` call that needs a `productId` you don't have yet.
 
 **Don't use:** When the product already exists in the workspace — jump straight to the `creative-generation` skill (load via `load_skill`). When the user named a model, authored a literal prompt, or handed you arbitrary reference images — that's [[coinis-marketplace-models]].
+
+**When the user points at an existing image and wants THAT image changed** ("edit this", "make versions of this", "another like this"), the source is the subject: route to `revise_creative_variate` via [[coinis-revisions]], which edits it via `sourceImageUrl`. `generate/image_templates` is only for a WHOLE NEW image.
 
 ## STOP — is this a BRAND-AWARENESS request? (check FIRST, before any resolution)
 
@@ -251,7 +253,7 @@ These set the defaults the "Surface the fire" step above builds on; don't restat
 
 ## Related skills
 
-- [[coinis-marketplace-models]] — model-keyed `generate/marketplace_proxy`; named model, literal prompt, arbitrary reference images, identity lock across a series.
+- [[coinis-marketplace-models]] — model-keyed `generate/marketplace_proxy`, **image AND video**; named model, literal prompt, arbitrary reference images, identity lock across a series.
 - [[coinis-video-from-url]] — video creative generation (UGC, V2V, avatar). Distinct spend rules; avatar is a content gate.
 - [[coinis-polling]] — render-status polling, `aiResults[]` shape, `{"error":""}` recovery.
 - [[coinis-batch-patterns]] — multi-product / multi-format fan-out and honest count math.
