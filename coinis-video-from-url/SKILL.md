@@ -3,7 +3,7 @@ name: coinis-video-from-url
 description: |
   Use when creating a video creative (UGC URL-mode, UGC image-mode / stills-to-video, video-to-video, cinematic, avatar, or talking-head) via the Coinis MCP (`coinis`). Covers the URL-driven UGC pipeline whose accepted fields differ sharply from image generation, the brand-target rule (silent create on unknown domain), the per-render credit cost (call `preview_cost` for the figure), and the longer async render times.
   NOT for: image creatives (use [[coinis-image-from-url]]); revising an existing creative via the `revise_*` family (no URL, different flow); polling cadence mechanics (use [[coinis-polling]]).
-allowed-tools: mcp__coinis__load_skill, mcp__coinis__list_skills, mcp__coinis__list_endpoints, mcp__coinis__list_my_workspaces, mcp__coinis__list_avatars, mcp__coinis__get_avatar, mcp__coinis__call_api, ScheduleWakeup
+allowed-tools: mcp__coinis__load_skill, mcp__coinis__list_skills, mcp__coinis__list_endpoints, mcp__coinis__list_my_workspaces, mcp__coinis__list_avatars, mcp__coinis__get_avatar, mcp__coinis__generate_ugc_video, mcp__coinis__generate_cinematic_video, mcp__coinis__generate_talking_head_video, mcp__coinis__call_api, ScheduleWakeup
 argument-hint: <product-page-url> [aspect-ratio 9:16|16:9] [ugc|video-to-video|avatar|talking-head]
 ---
 
@@ -44,12 +44,12 @@ The Coinis MCP exposes several video generators. They differ in input shape, cos
 | `generate_ugc_video` (URL mode) | `/generated_creatives/generate/ugc_video/` | **`url`** = HTML product page URL; `aspectRatio` = **`'9:16'` or `'16:9'` ONLY** (no 1:1, no 4:5) | Per-render — run `preview_cost` before firing. | URL-driven. Many fields silently dropped; `{"error": ""}` is NOT credit-safe. See failure-mode note below. |
 | `generate_ugc_video` (image mode) | `/generated_creatives/generate/ugc_video/` | uploaded still(s); `aspectRatio` = `'9:16'` or `'16:9'` | Per-render — run `preview_cost` before firing. | UGC supports an image mode that animates uploaded stills. See "UGC image mode" below; defer body shape to `creative-generation`. |
 | `generate_video_to_video` | `/generated_creatives/generate/video_to_video/` | source video, prompt | Per-render — run `preview_cost` before firing. | Style transfer / re-animation. |
-| `generate_cinematic_video` | `/generated_creatives/generate/cinematic_video/` | see `creative-generation` | Per-render — run `preview_cost` before firing. | Cinematic endpoint, 15s/30s. Has its own in-MCP skill `generate-cinematic-video`; don't invent the body shape. |
+| `generate_cinematic_video` | `/generated_creatives/generate/cinematic_video/` | see `creative-generation` | Per-render — run `preview_cost` before firing. | Cinematic V1 — seven fixed-duration flows (cinematic 10/15/20/30, product-shot 15, product-doc 15, product-spec 10). Has its own in-MCP skill `generate-cinematic-video`; don't invent the body shape. |
 | `generate_avatar_talking_head` (avatar video / talking-head) | `/generated_creatives/avatar/talking_head/` | `productId`, `prompt` (REQUIRED — the spoken script) | Per-render — run `preview_cost` before firing. | `prompt` IS the script. Never invent it; ask the user. Talking-head adds provider-specific avatar/voice params. |
 
 **For a named/chosen video model, an authored prompt, or pinning an arbitrary public image URL as the literal first frame — that's `generate/marketplace_proxy` ([[coinis-marketplace-models]]), not the pipelines above.** The pipelines here pick the provider server-side; `marketplace_proxy` is the only video surface where the model and the literal prompt are yours. Pinning a first frame there is `images` + `imageRole: "first-frame"` with no upload round-trip.
 
-**A hard param constraint re-shops the pipeline — it does not round the user up.** Each pipeline has a fixed contract: the cinematic (TVC) path only serves its fixed long durations, so a "5 s clip" request cannot be served by rounding up to the shortest one — pivot to `marketplace_proxy` (which does short durations) and reload that playbook. When a duration/aspect/param falls outside one family's contract, **switch families, don't negotiate the brief**.
+**A hard param constraint re-shops the pipeline — it does not round the user up.** Each pipeline has a fixed contract: the cinematic V1 pipeline ships seven flows with fixed durations (cinematic 10 / 15 / 20 / 30 s, product-shot 15 s, product-doc 15 s, product-spec 10 s — defer the current set to `load_skill('generate-cinematic-video')`), so a "5 s clip" request falls outside all of them and cannot be served by rounding up to the nearest — pivot to `marketplace_proxy` (which does short arbitrary durations) and reload that playbook. When a duration/aspect/param falls outside one family's contract, **switch families, don't negotiate the brief**.
 
 **The `…/preview_cost/` route is not always a sibling of the fire path.** `generate/cinematic_video/preview_cost/` 404s ("not in the OpenAPI catalogue"); the working preview for that pipeline is `generate/v1/tvc/submit/preview_cost/`. A "not in the catalogue" error is a **route-discovery trigger** (`list_endpoints(filter="preview_cost")`), not proof the capability is gone. Never assume `<fire_path>/preview_cost/` exists — confirm it.
 
@@ -181,7 +181,7 @@ One short line: `"UGC video #<id> ready: <videoUrl>"`. No menu.
 
 ### `generate_cinematic_video`
 
-- Real premium cinematic endpoint (15s/30s). Has its own in-MCP skill — `load_skill('generate-cinematic-video')` for the body shape; don't invent it here.
+- Real premium cinematic endpoint — seven fixed-duration V1 flows (cinematic 10/15/20/30, product-shot 15, product-doc 15, product-spec 10). Has its own in-MCP skill — `load_skill('generate-cinematic-video')` for the body shape; don't invent it here.
 - Same spend gate: `preview_cost` → surface `tokenCost` + `currentBalance` → fire on consent.
 
 ## Quick reference — endpoints

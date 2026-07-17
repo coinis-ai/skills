@@ -3,7 +3,7 @@ name: coinis-revisions
 description: |
   Use when iterating on a creative that ALREADY EXISTS in the Coinis MCP (`coinis`) — the user wants more variations of it, a different aspect ratio, a localized/translated version, a higher-resolution copy, or ad-copy text generated against it. Triggers on "make more like this", "give me a 9:16 version of #3703", "translate this creative to German", "upscale this", "write ad copy for this creative". Covers the five `revise/*` endpoints (`variate`, `resize`, `translate`, `upscale`, `ad_copy`), the source-creative-id prerequisite, and the per-endpoint spend rule (`ad_copy` is zero-cost / no gate; the other four require the `preview_cost` ask-first gate).
   NOT for: a fresh creative from a product URL (use [[coinis-image-from-url]]) or video (use [[coinis-video-from-url]]); or render-status polling mechanics (use [[coinis-polling]]).
-allowed-tools: mcp__coinis__load_skill, mcp__coinis__list_endpoints, ScheduleWakeup
+allowed-tools: mcp__coinis__load_skill, mcp__coinis__list_endpoints, mcp__coinis__revise_creative_variate, mcp__coinis__revise_creative_resize, mcp__coinis__revise_creative_translate, mcp__coinis__revise_creative_upscale, mcp__coinis__call_api, ScheduleWakeup
 argument-hint: <source-creative-id-or-url> <variate|resize|translate|upscale|ad_copy> [target e.g. "9:16" | "de" | "+1024px"]
 ---
 
@@ -21,7 +21,7 @@ The `revise/*` family is Coinis's iteration suite — five endpoints that operat
 
 | Endpoint | What it does | When to use | Spend gate | Creates new id? |
 |---|---|---|---|---|
-| `revise/variate` | New variations of an existing creative (same product/brand, fresh compositions) | "give me 3 more like #3703" — user liked the direction, wants siblings | `preview_cost` ask-first | Yes (new creative id) |
+| `revise/variate` | **Edits the user's current image** via `sourceImageUrl` — same product/composition, tweaked details, steered by a required `prompt` | "edit this", "make versions of this", "another like this" — the user is pointing AT an image and wants THAT image changed | `preview_cost` ask-first | Yes (new creative id) |
 | `revise/resize` | Reframe the existing creative to a different aspect ratio | "make this a 9:16 story version" — same art, new crop/extend | `preview_cost` ask-first | Yes (new creative id) |
 | `revise/translate` | Localize the copy/text baked into the creative to another language | "translate this creative to German" — keep art, swap text | `preview_cost` ask-first | Yes (new creative id) |
 | `revise/upscale` | Higher-resolution copy of the existing creative | "give me a print-res version of this" — same image, more pixels | `preview_cost` ask-first | Yes (new creative id) |

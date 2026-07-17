@@ -3,7 +3,7 @@ name: coinis-batch-patterns
 description: |
   Use when the user requests creatives for multiple products at once, or multiple formats across one product (e.g. "4 squares + 2 stories for each of these 12 SKUs") — covers parallel POST shape, honest count math across format collapse, per-batch surface convention, spend pre-flight.
   NOT for: a single-product single-format creative (use [[coinis-image-from-url]] / [[coinis-video-from-url]]); polling/wakeup cadence for the fired jobs (use [[coinis-polling]]); campaign/ad-set/ad assembly from finished creatives (use [[coinis-campaign-flow-cli]]).
-allowed-tools: mcp__coinis__load_skill, mcp__coinis__list_endpoints, mcp__coinis__list_my_workspaces, mcp__coinis__list_brands, mcp__coinis__list_products, mcp__coinis__list_creatives, mcp__coinis__call_api, ScheduleWakeup
+allowed-tools: mcp__coinis__load_skill, mcp__coinis__list_endpoints, mcp__coinis__list_my_workspaces, mcp__coinis__list_brands, mcp__coinis__list_products, mcp__coinis__list_creatives, mcp__coinis__analyze_and_create_product, mcp__coinis__generate_image_templates, mcp__coinis__call_api, ScheduleWakeup
 argument-hint: <N products / SKUs or "the usual batch"> <formats e.g. "4 square + 3 story per product">
 ---
 
@@ -75,6 +75,8 @@ A **storyboard** is the extreme case: one hand-written prompt per shot/scene, ne
 
 A fan-out where each fire's `images[]` references **another generation's output** (identity lock — same product/actor/set across the set) is **not** a parallel wave. It's ordered by the dependency graph: fire the anchor, poll it to `success`, read its rendered URL, THEN fan out with that one URL in every sibling's `images[]`. The mechanics and the lock/delta/lock prompt shape are owned by [[coinis-marketplace-models]]; the batch rule is: **order by dependency, not by asset list** — an identity-locked set cannot run as one parallel wave.
 
+**First check whether you need the chain at all.** For a **workspace product**, the simpler lock is passing `productId` with **no explicit `images`** — the product's own catalog images auto-seed the reference, so the whole set stays one parallel wave. Manual anchor-chaining is for a **non-product** subject (an actor, a set, an invented character) that has no catalog to seed from.
+
 ## Surface discipline — ONE turn per batch, not per creative
 
 The user does not want to see 72 "creative #X firing" messages. The convention:
@@ -104,9 +106,9 @@ Don't sum a hardcoded per-creative cost and don't read spend off a balance delta
 
 When batching across N products that don't exist in the workspace yet:
 
-1. **Wave 1 — analyze:** `analyze_product(url=...)` × N in parallel. Free, sync, cheap. Returns identity data per URL.
-2. **Wave 2 — create:** `POST /brands/` (if needed, per [[coinis-image-from-url]] brand-target-decision rule) and `POST /products/` × N in parallel, using the analyzed identities. Capture `pid` per URL.
-3. **Wave 3 — generate:** `generate_*` × (N × format-groups) in parallel, using the `pid`s from wave 2.
+1. **Wave 1 — brand:** `POST /brands/` if the target brand doesn't exist yet (per the [[coinis-image-from-url]] brand-target-decision rule). Skip entirely when it does.
+2. **Wave 2 — analyze + create:** `analyze_and_create_product(url=…)` × N in parallel. There is **no bare `analyze_product` tool** — analysing a URL and creating the product are the *same* call, and it returns the `pid` per URL.
+3. **Wave 3 — generate:** `generate_image_templates` (or the other typed `generate_*` tools) × (N × format-groups) in parallel, using the `pid`s from wave 2.
 
 Three serial waves. Each wave is internally parallel. Don't try to overlap waves — `generate_*` needs a `productId` that doesn't exist until wave 2 lands (UC-E9 bundling rule).
 
@@ -116,7 +118,7 @@ When the user says "same products as last week" / "the usual" / "my SKUs":
 
 1. `GET /api/workspaces/{wid}/brands/` — find the brand by domain match.
 2. `GET /api/workspaces/{wid}/brands/{bid}/products/` — match by `url` field.
-3. Reuse the existing `pid`. **Do NOT** run `analyze_product` again. **Do NOT** create a duplicate product (UC-D3).
+3. Reuse the existing `pid`. **Do NOT** run `analyze_and_create_product` again — it would re-create the product. **Do NOT** create a duplicate product (UC-D3).
 
 For multi-brand returning users (MS-3, MS-5): repeat steps 1–2 per brand. Surface a one-liner confirming the reuse: "Reusing 8 products under #Y GlowLab from last week — firing the new batch now." Then jump straight to wave 3.
 
@@ -136,7 +138,7 @@ When the user pastes several scenario ideas ("here are 5 concepts"), do **not** 
 | Promising 6 creatives from `outputFormats=["story","reel"], quantity=3` | Collapses to 3 — verified at `#3703`. Use single-format × N for honest counts. |
 | Surfacing 72 turns "creative #X firing" instead of one batch surface | One turn per batch on fire; one turn per landing on render; one summary at end. |
 | Waiting for all renders before surfacing any | Parallel polling — show each as it lands. Don't block on the slowest ([[coinis-polling]]). |
-| Re-running `analyze_product` on a URL the workspace already has as a product | Dedup by `url` field first. Free isn't free if it adds latency to a 72-creative batch. |
+| Re-running `analyze_and_create_product` on a URL the workspace already has as a product | Dedup by `url` field first — the call *creates*, so a re-run duplicates the product, not just adds latency to a 72-creative batch. |
 | Computing batch spend from a balance delta after the run | UC-J2. Balance lags and can move from other causes (top-ups mid-run). Sum the `tokenCost` from `preview_cost` previews instead. |
 | Firing wave 3 before wave 2's `POST /products/` returns | `productId` doesn't exist yet → 422. Wait for each wave to land before starting the next. |
 | Starting a fan-out without previewing its cost | Sum `tokenCost` from a `preview_cost` POST per fire and gate on `sufficient`/`currentBalance` before the first real fire. |
