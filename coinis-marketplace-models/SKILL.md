@@ -55,7 +55,7 @@ Route by **deliverable and authorship**, never by "which model is best". A durat
 ```
 POST /api/workspaces/{wid}/generated_creatives/generate/marketplace_proxy/preview_cost/
 body: {"model": "<deliberately-invalid>", "prompt": "test"}
-→ 422, e.g. "Input should be <MarketplaceVideoModel.VEO_3_1_FAST: 'veo-3.1-fast'>"
+→ 422, e.g. "Input should be <MarketplaceVideoModel.SEEDANCE_2_0: 'seedance-2.0'>"
          + {"loc": ["body","HappyHorseRequest","images"], "msg": "Field required"}
 ```
 
@@ -73,7 +73,9 @@ Treat that 422 as authoritative in both directions — it is the always-current 
 
 Then surface the matrix as ONE question with a **craft-justified** recommendation, and let the user choose:
 
-> "Three 5 s vertical clips. Seedance 2.0 — 390 total: highest fidelity, most reliable on the on-screen text beats. Seedance 1.5 Pro — 51 total: good motion, text can garble. Veo 3.1 Fast — 84 total at 6 s (it can't do 5 s). Which?"
+> "Three 5 s vertical clips, 9:16. Seedance 2.0 at 1080p — &lt;tokenCost&gt; total: highest fidelity, and the only tier that can go to 4K if you want a master later. Seedance 2.0 Fast — &lt;tokenCost&gt; total: same 4–15 s range and reference-image support, but it caps at 720p. Which?"
+
+Quote whatever `preview_cost` returned for each candidate — never a figure from memory. **When you name a model in an option, use Seedance 2.0 or newer**; the older tiers are superseded and should not be offered as a default choice.
 
 **Never silently default to the cheapest, and never assume pricier is better.** Previewing only the model you already picked hides the trade-off: the user overpays on filler, or gets the cheap tier on a hero asset, and never knew there was a choice. Spend up on hero assets, down on filler. Equal `tokenCost` across a resolution step → take the higher resolution.
 

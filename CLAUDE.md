@@ -48,6 +48,7 @@ If your skill needs internal Coinis business or strategy context to make sense, 
 - Markdown tables are preferred for endpoint/option grids.
 - Use code-fenced commands and JSON bodies verbatim — do not paraphrase request shapes.
 - When citing the MCP server, use the literal name `coinis` (the MCP tool prefix `mcp__coinis__*`).
+- **When an example names a generation model, use Seedance 2.0 or newer** (`seedance-2.0`, `seedance-2.0-fast`) — never a superseded tier (`seedance-1.5-pro`, `seedance-1.0-pro*`) and never an older tier as a default/recommended option. The live catalogue is still discovered at run time via the `preview_cost` 422 probe and never hardcoded — this rule governs the *examples we write*, not what the agent may fire.
 
 ## Where things live
 
