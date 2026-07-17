@@ -28,7 +28,7 @@ Correction-and-completion release. 1.3.0 shipped the marketplace-models skill an
 - **`coinis-revisions`** — corrected the `revise/variate` description: it **edits the user's current image** via `sourceImageUrl` (same product/composition, tweaked details, steered by a required `prompt`), rather than producing fresh compositions. Reach for it when the user points at an image and wants *that* image changed; `generate_image_templates` is only for a whole new image.
 - **`coinis-image-from-url`** — added the "edit this image" routing note handing off to `revise_creative_variate` ([[coinis-revisions]]) when the source *is* the subject.
 - **`coinis-batch-patterns`** — the `productId` auto-seed as the first-choice identity lock for a workspace product (the whole set stays one parallel wave); manual chaining reserved for non-product subjects.
-- **`CLAUDE.md`** — the model-example house rule now spans both modalities: Seedance 2.0 or newer for video, Seedream for image, with non-house ids allowed only as catalogue coverage; the `preview_cost` 422 illustration uses a vendor-neutral placeholder rather than a real non-house variant.
+- **`CLAUDE.md`** — the model-example rule now spans both modalities: an example names a currently-available model id (never a retired/superseded tier), the full catalogue may be listed for coverage with its observation date, and the `preview_cost` 422 illustration uses a vendor-neutral placeholder.
 - **`COOKBOOK.md`** — an image-side routing row for `coinis-marketplace-models` (Seedream model choice); the skill count is unchanged at 9.
 - Version bump 1.3.0 → 1.4.0 across `VERSION` and all four plugin manifests.
 

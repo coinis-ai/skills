@@ -54,7 +54,7 @@ The table below is **dated; the server is the authority**. Re-probe before quoti
 | Video | `seedance-2.0`, `seedance-2.0-fast`, `seedance-1.5-pro`, `seedance-1.0-pro`, `seedance-1.0-pro-fast` |
 | Video | `veo-3.1`, `veo-3.1-fast`, `grok-imagine-video`, `happy-horse`, `gen4.5`, `aleph-2` |
 
-Listing is coverage, not recommendation. **When you name a model in an option, use the house models — Seedream for image, Seedance 2.0 or newer for video**; superseded tiers are not a default choice.
+Listing is coverage, not a recommendation — this skill doesn't push any particular vendor. When you present options, **lead with a current model and let the user choose; don't default to a superseded/retired tier.**
 
 ## Discovery — the 422 IS the live schema
 
