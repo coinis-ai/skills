@@ -3,7 +3,7 @@ name: coinis-batch-patterns
 description: |
   Use when the user requests creatives for multiple products at once, or multiple formats across one product (e.g. "4 squares + 2 stories for each of these 12 SKUs") — covers parallel POST shape, honest count math across format collapse, per-batch surface convention, spend pre-flight.
   NOT for: a single-product single-format creative (use [[coinis-image-from-url]] / [[coinis-video-from-url]]); polling/wakeup cadence for the fired jobs (use [[coinis-polling]]); campaign/ad-set/ad assembly from finished creatives (use [[coinis-campaign-flow-cli]]).
-allowed-tools: mcp__coinis__load_skill, mcp__coinis__list_endpoints, mcp__coinis__list_my_workspaces, mcp__coinis__analyze_product, mcp__coinis__generate_image_templates, ScheduleWakeup
+allowed-tools: mcp__coinis__load_skill, mcp__coinis__list_endpoints, mcp__coinis__list_my_workspaces, mcp__coinis__list_brands, mcp__coinis__list_products, mcp__coinis__list_creatives, mcp__coinis__call_api, ScheduleWakeup
 argument-hint: <N products / SKUs or "the usual batch"> <formats e.g. "4 square + 3 story per product">
 ---
 
@@ -56,6 +56,25 @@ The single source of confusion. Memorize this:
 - Never promise `len(outputFormats) × quantity` when the formats share an aspect ratio. Story + reel ARE the same aspect ratio (9:16) — they collapse.
 - For multi-aspect batches (square + portrait + story), fan out one POST per aspect-ratio group so per-format counts are honest.
 
+## The third batch axis — one product, many directions
+
+The fan-out shapes above cover *products × formats*. There is a third axis marketers use constantly: **one product, N different creative directions**. Two distinct shapes, and the difference decides the request:
+
+- **Variance** (`quantity: N` in one POST) — N renders of the **same** scene line; the model re-samples. Use when the user wants "a few options of THIS look". Cheap, one `additionalInformations`.
+- **Variety** (N separate POSTs, one authored scene line each) — N **structurally different** concepts. Use when the user wants "different angles / different hooks". This is the multi-angle fan-out: fire one POST per art direction, each with its own `additionalInformations` (the field is global per call, so a distinct look = a distinct call).
+
+Reaching for `quantity: N` unconditionally buys variance and silently denies variety. When the user says "options", "angles", "variations on the message", default to the **variety** shape (a good default is a 5-angle matrix), not `quantity: 5` of one prompt. Compose the scene brief **once** as a shared intermediate, then derive each POST's `additionalInformations` from it — don't re-author from scratch per fire.
+
+A **storyboard** is the extreme case: one hand-written prompt per shot/scene, never one prompt for the whole video. Route authored per-scene prompts to [[coinis-marketplace-models]] (literal `prompt`); route template-shaped per-angle image sets through `generate/image_templates`.
+
+## Validate before you fan out
+
+**Probe one cheap format at `quantity: 1` before committing an unvalidated direction to full batch width.** Fire one, poll it, look at it, take the critique — THEN fan out. Validating a direction at 72-record width means paying 72× for a look that misses on the first render. The probe is one creative's cost; the mistake is the whole batch's.
+
+## Identity-locked series is a LATER wave, generated serially
+
+A fan-out where each fire's `images[]` references **another generation's output** (identity lock — same product/actor/set across the set) is **not** a parallel wave. It's ordered by the dependency graph: fire the anchor, poll it to `success`, read its rendered URL, THEN fan out with that one URL in every sibling's `images[]`. The mechanics and the lock/delta/lock prompt shape are owned by [[coinis-marketplace-models]]; the batch rule is: **order by dependency, not by asset list** — an identity-locked set cannot run as one parallel wave.
+
 ## Surface discipline — ONE turn per batch, not per creative
 
 The user does not want to see 72 "creative #X firing" messages. The convention:
@@ -72,7 +91,9 @@ The user does not want to see 72 "creative #X firing" messages. The convention:
 
 ## Spend pre-flight — preview the cost, then fire
 
-Don't sum a hardcoded per-creative cost and don't read spend off a balance delta. The live mechanism is the `…/preview_cost/` sibling endpoint: POST it once per intended fire and it returns `{tokenCost, currentBalance, sufficient}`. For a fan-out of N, sum the `tokenCost` values across the previews and gate the whole batch on whether the workspace can cover the total.
+Don't sum a hardcoded per-creative cost and don't read spend off a balance delta. The live mechanism is the `…/preview_cost/` sibling endpoint: POST it once per intended fire and it returns `{tokenCost, breakdown, currentBalance, sufficient}`. For a fan-out of N, sum the `tokenCost` values across the previews and gate the whole batch on whether the workspace can cover the total.
+
+**A representative preview is only reusable across fires that share the same shape — check `breakdown.formula`.** One representative preview × N **under-quotes a mixed batch** (different `resolution`, different `model`, image vs video). When the batch mixes fire-shapes, preview **once per distinct shape** and sum the projections; a single per-unit price is valid only when `breakdown` is per-unit and the fires are uniform. `breakdown.costPerUnit` / `units` / `unitLabel` is the per-unit authority — `tokenCost` is the previewed body's total, not necessarily a unit price. The `preview_cost` probes are free, so batching them in parallel to price the whole grid costs nothing.
 
 - For a batch, run the `preview_cost` POST for each intended fire (or a representative fire per format-group), sum the returned `tokenCost`, and compare against `currentBalance` BEFORE starting any real fires.
 - If any preview returns `sufficient: false`, or the summed `tokenCost` exceeds `currentBalance`, surface the gap BEFORE starting any fires (UC-E8): "This batch's previewed cost exceeds the workspace balance — top up, pick another workspace, or reduce quantity?"
@@ -101,6 +122,12 @@ For multi-brand returning users (MS-3, MS-5): repeat steps 1–2 per brand. Surf
 
 Cross-ref the brand-target-decision rule in [[coinis-image-from-url]] — domain match never auto-creates a parallel brand without asking.
 
+**Creative-level dedup — check before you spend.** Before firing a paid generate for a look the workspace may already have, search the creative history: `GET /generated_creatives/?search=…&ordering=-id&page_size=3` ([[coinis-polling]] owns the listing shape — `page_size`, not `limit`; `total:0` from `search` is not proof of absence). A reusable rendered creative already paid for beats a fresh fire; verify its URL is still live before reusing it.
+
+## A multi-scenario brief is not a fan-out queue
+
+When the user pastes several scenario ideas ("here are 5 concepts"), do **not** silently fan out all of them — that can be a large, unrequested spend. **Shortlist first:** present the concepts as options with `(Recommended)` on the strongest and the **projected `tokenCost` inside each option label**, and let the user pick which to produce. Build exactly what they choose; propose extras, don't add them.
+
 ## Common mistakes
 
 | Mistake | Reality |
@@ -113,6 +140,11 @@ Cross-ref the brand-target-decision rule in [[coinis-image-from-url]] — domain
 | Computing batch spend from a balance delta after the run | UC-J2. Balance lags and can move from other causes (top-ups mid-run). Sum the `tokenCost` from `preview_cost` previews instead. |
 | Firing wave 3 before wave 2's `POST /products/` returns | `productId` doesn't exist yet → 422. Wait for each wave to land before starting the next. |
 | Starting a fan-out without previewing its cost | Sum `tokenCost` from a `preview_cost` POST per fire and gate on `sufficient`/`currentBalance` before the first real fire. |
+| Using `quantity: N` when the user asked for "options / angles / variations" | That buys variance (N re-samples of one look), not variety. Fire N POSTs with N authored scene lines. |
+| Reusing one representative preview across a mixed-shape batch | Under-quotes. Preview once per distinct fire-shape (resolution/model/modality) and sum. |
+| Running an identity-locked set as one parallel wave | The siblings reference the anchor's rendered URL — it doesn't exist until the anchor hits `success`. Anchor first, then fan out. |
+| Fanning out an unvalidated direction at full width | Probe one at `quantity: 1`, take the critique, then fan out. |
+| Auto-producing every scenario in a multi-concept brief | Shortlist with `(Recommended)` + per-option `tokenCost`; build what the user picks. |
 | Treating a declined preview or `sufficient: false` as an error to retry | It's a normal outcome — surface the projected batch shortfall/decline in one line and stop before any fire. Don't re-fire, don't loop the preview, don't check a balance delta. |
 
 ## CLI-surface UX rules
@@ -129,6 +161,7 @@ These set the defaults the "Surface discipline" and "Batch spend-gate" sections 
 
 ## Cross-links
 
+- [[coinis-marketplace-models]] — model-keyed fan-outs, the serial identity-lock chaining shape, and cross-candidate `preview_cost` shopping.
 - [[coinis-image-from-url]] — single-image flow, brand-target-decision rule, per-fire composition rules.
 - [[coinis-video-from-url]] — single-video flow, UGC pre-flight, avatar script content gate.
 - [[coinis-polling]] — wakeup cadence, parallel-poll-don't-block rule.

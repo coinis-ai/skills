@@ -115,6 +115,7 @@ These set the defaults the "Surface the fire" step above builds on; don't restat
 - [[coinis-image-from-url]] — brand/product setup sequence, the brand-target rule, and the image-credit spend convention this endpoint shares.
 - [[coinis-polling]] — render-status polling cadence (same class as `image_templates`), the `aiResults[]` shape, sort-by-id rule.
 - [[coinis-video-from-url]] — if the user wants a video remix rather than an image recreation.
+- [[coinis-marketplace-models]] — if the user names a model, authors the prompt verbatim, or pins arbitrary reference images rather than driving the brand-restyle recreation.
 
 ## Why this skill exists
 
