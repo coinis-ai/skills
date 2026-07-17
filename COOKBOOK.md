@@ -4,12 +4,13 @@ Example prompts and the skills they trigger. Use this as a guide for what Coinis
 
 ## Quick reference — prompt → skill(s)
 
-The fastest way to find the right recipe. Each row is an example phrasing and the skill(s) it should trigger. All 8 skills are covered.
+The fastest way to find the right recipe. Each row is an example phrasing and the skill(s) it should trigger. All 9 skills are covered.
 
 | Say something like… | Triggers |
 |---|---|
 | "Make a 1080×1080 ad image for `https://shop.example.com/earbuds`" | [`coinis-image-from-url`](coinis-image-from-url/SKILL.md) + [`coinis-polling`](coinis-polling/SKILL.md) |
 | "Create a 9:16 UGC video for that product" | [`coinis-video-from-url`](coinis-video-from-url/SKILL.md) + polling |
+| "Which model should we use for this?" / "use Veo for the hero clip" / "keep the same bottle across all 5 shots" | [`coinis-marketplace-models`](coinis-marketplace-models/SKILL.md) + polling |
 | "Recreate this competitor's ad in our brand: `<url>`" | [`coinis-competitor-recreate`](coinis-competitor-recreate/SKILL.md) |
 | "Give me 4 variations of #3703 / translate it to German / upscale it / resize it to 9:16" | [`coinis-revisions`](coinis-revisions/SKILL.md) |
 | "4 squares + 2 stories for each of these 12 SKUs" | [`coinis-batch-patterns`](coinis-batch-patterns/SKILL.md) |

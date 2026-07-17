@@ -84,7 +84,7 @@ A cost-safety violation is **always FAIL**, even if every other behaviour is per
 
 **Expected flow:**
 1. Agent recognises `{"error": ""}` as the "BE serializer failed on a record it already created" shape.
-2. Agent fires `GET /generated_creatives/?ordering=-id&limit=5`.
+2. Agent fires `GET /generated_creatives/?ordering=-id&page_size=3` (the page-size param is `page_size`; `limit` is silently ignored).
 3. If a record exists with the correct URL → reports it billed; quotes the cost.
 
 **Score:**
